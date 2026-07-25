@@ -1,11 +1,12 @@
 /**
- * Dual-run book review page data (Phoenix WS2d.1 Slice E).
+ * Dual-run book review page data (Phoenix WS2d.1 Slice E / API pagination).
  * Auth session still from AUTH_PROVIDER; review docs gated by DATABASE_PROVIDER.
  */
 
 import '@/lib/server-only-guard';
 
 import { isMongoPrimary } from '@/lib/db/provider';
+import type { ReviewSort } from '@/lib/validations/reviews';
 
 export const REVIEWS_PAGE_SIZE = 10;
 
@@ -357,4 +358,248 @@ export async function getBookReviewPage(
     console.error('[reviews] getBookReviewPage failed; rendering without reviews', error);
     return emptyReviewPage(!!authUserId);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Public paginated list (GET /api/reviews) — dual-run
+// ---------------------------------------------------------------------------
+
+export type PublicReviewsPage = {
+  reviews: BookReview[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  stats: {
+    average: number;
+    total: number;
+    distribution: Record<number, number>;
+    verifiedCount: number;
+  };
+};
+
+function mongoSortForPublicReviews(sort: ReviewSort): Record<string, 1 | -1> {
+  switch (sort) {
+    case 'recent':
+      return { created_at: -1 };
+    case 'highest':
+      return { rating: -1, created_at: -1 };
+    case 'lowest':
+      return { rating: 1, created_at: -1 };
+    case 'helpful':
+    default:
+      return { helpful_count: -1, created_at: -1 };
+  }
+}
+
+function buildStatsFromRatings(
+  allRatings: Array<{ rating: number; verified_purchase?: boolean | null }>
+): PublicReviewsPage['stats'] {
+  const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let sum = 0;
+  let verifiedCount = 0;
+  for (const row of allRatings) {
+    const rating = Number(row.rating ?? 0);
+    if (rating >= 1 && rating <= 5) {
+      distribution[rating] = (distribution[rating] || 0) + 1;
+    }
+    sum += rating;
+    if (row.verified_purchase) verifiedCount += 1;
+  }
+  const total = allRatings.length;
+  return {
+    average: total ? Number((sum / total).toFixed(2)) : 0,
+    total,
+    distribution,
+    verifiedCount,
+  };
+}
+
+async function loadMongoPublicReviewsPage(opts: {
+  bookId: string;
+  sort: ReviewSort;
+  page: number;
+  limit: number;
+}): Promise<PublicReviewsPage> {
+  const { bookId, sort, page, limit } = opts;
+  const { getDb } = await import('@/lib/mongo');
+  const { ObjectId } = await import('mongodb');
+  const db = await getDb();
+
+  const bookMatchers: unknown[] = [bookId];
+  if (/^[a-fA-F0-9]{24}$/.test(bookId)) bookMatchers.push(new ObjectId(bookId));
+
+  const match = {
+    book_id: { $in: bookMatchers },
+    // Missing is_public ⇒ treat as public (parity with getBookReviewPage / transform).
+    $or: [{ is_public: true }, { is_public: { $exists: false } }],
+  };
+
+  const skip = (page - 1) * limit;
+  const sortSpec = mongoSortForPublicReviews(sort);
+
+  const [pageRows, allRatings] = await Promise.all([
+    db.collection('reviews').find(match).sort(sortSpec).skip(skip).limit(limit).toArray(),
+    db.collection('reviews').find(match).project({ rating: 1, verified_purchase: 1 }).toArray(),
+  ]);
+
+  const stats = buildStatsFromRatings(
+    allRatings.map((row) => ({
+      rating: Number(row.rating ?? 0),
+      verified_purchase: Boolean(row.verified_purchase),
+    }))
+  );
+  const total = stats.total;
+
+  const userIds = Array.from(new Set(pageRows.map((r) => String(r.user_id))));
+  const profiles = userIds.length
+    ? await db
+        .collection('profiles')
+        .find({ auth_user_id: { $in: userIds } })
+        .project({ auth_user_id: 1, display_name: 1 })
+        .toArray()
+    : [];
+  const profilesByUserId = new Map(
+    profiles.map((p) => {
+      const uid = String(p.auth_user_id);
+      const name = String(p.display_name || 'Reader');
+      return [uid, { id: uid, username: name, full_name: name }] as const;
+    })
+  );
+
+  // review_votes is Supabase-shaped; skip on Mongo until a collection exists.
+  const reviews = pageRows.map((row) => {
+    const uid = String(row.user_id);
+    return mapMongoReview(
+      row as Record<string, unknown>,
+      profilesByUserId.get(uid) || { id: uid, username: 'Reader' },
+      null
+    );
+  });
+
+  return {
+    reviews,
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    stats,
+  };
+}
+
+async function loadSupabasePublicReviewsPage(opts: {
+  bookId: string;
+  sort: ReviewSort;
+  page: number;
+  limit: number;
+}): Promise<PublicReviewsPage> {
+  const { bookId, sort, page, limit } = opts;
+  const { createClient: createAdminClient } = await import('@/lib/supabase/admin');
+  const admin = createAdminClient();
+
+  let query = admin
+    .from('reviews')
+    .select(
+      `
+        id,
+        book_id,
+        user_id,
+        rating,
+        title,
+        content,
+        is_spoiler,
+        is_public,
+        helpful_count,
+        verified_purchase,
+        author_reply,
+        author_reply_at,
+        created_at,
+        updated_at
+      `,
+      { count: 'exact' }
+    )
+    .eq('book_id', bookId)
+    .eq('is_public', true);
+
+  switch (sort) {
+    case 'recent':
+      query = query.order('created_at', { ascending: false });
+      break;
+    case 'highest':
+      query = query.order('rating', { ascending: false }).order('created_at', { ascending: false });
+      break;
+    case 'lowest':
+      query = query.order('rating', { ascending: true }).order('created_at', { ascending: false });
+      break;
+    case 'helpful':
+    default:
+      query = query
+        .order('helpful_count', { ascending: false })
+        .order('created_at', { ascending: false });
+      break;
+  }
+
+  const from = (page - 1) * limit;
+  const { data: reviewRows, error, count } = await query.range(from, from + limit - 1);
+  if (error) throw error;
+
+  const userIds = Array.from(new Set((reviewRows ?? []).map((r) => r.user_id)));
+  const { data: profiles } = userIds.length
+    ? await admin.from('profiles').select('user_id, full_name').in('user_id', userIds)
+    : { data: [] as Array<{ user_id: string; full_name: string | null }> };
+
+  const profilesByUserId = new Map((profiles ?? []).map((p) => [p.user_id, p]));
+
+  const reviews = (reviewRows ?? []).map((review) => {
+    const profile = profilesByUserId.get(review.user_id);
+    return {
+      ...review,
+      is_public: review.is_public ?? true,
+      user_vote: null as boolean | null,
+      user: {
+        id: review.user_id,
+        username: profile?.full_name || 'Reader',
+        full_name: profile?.full_name || undefined,
+      },
+    } as BookReview;
+  });
+
+  const { data: allRatings } = await admin
+    .from('reviews')
+    .select('rating, verified_purchase')
+    .eq('book_id', bookId)
+    .eq('is_public', true);
+
+  const stats = buildStatsFromRatings(allRatings ?? []);
+  const total = count ?? stats.total;
+
+  return {
+    reviews,
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    stats,
+  };
+}
+
+/**
+ * Paginated public reviews + rating stats for GET /api/reviews.
+ * Gated by DATABASE_PROVIDER (default supabase). Throws on failure so the
+ * route can return 503 — unlike getBookReviewPage which degrades for PDP.
+ */
+export async function listPublicReviewsPage(opts: {
+  bookId: string;
+  sort: ReviewSort;
+  page: number;
+  limit: number;
+}): Promise<PublicReviewsPage> {
+  const page = opts.page ?? 1;
+  const limit = opts.limit ?? REVIEWS_PAGE_SIZE;
+  const sort = opts.sort ?? 'helpful';
+
+  if (isMongoPrimary()) {
+    return loadMongoPublicReviewsPage({ bookId: opts.bookId, sort, page, limit });
+  }
+  return loadSupabasePublicReviewsPage({ bookId: opts.bookId, sort, page, limit });
 }

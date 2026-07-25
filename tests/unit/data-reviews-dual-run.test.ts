@@ -1,7 +1,7 @@
 /** @jest-environment node */
 
 /**
- * Phoenix WS2d.1 Slice E — getBookReviewPage dual-run
+ * Phoenix WS2d.1 Slice E — getBookReviewPage + listPublicReviewsPage dual-run
  */
 
 const mockIsMongoPrimary = jest.fn(() => false);
@@ -27,19 +27,32 @@ jest.mock('mongodb', () => ({
 
 const mockFindToArray = jest.fn();
 const mockFindOne = jest.fn();
+const mockSkip = jest.fn();
+const mockSort = jest.fn();
+const mockLimit = jest.fn();
+
 const mockGetDb = jest.fn(async () => ({
   collection: jest.fn(() => ({
-    find: jest.fn(() => ({
-      sort: jest.fn(() => ({
-        limit: jest.fn(() => ({
-          toArray: mockFindToArray,
-        })),
-      })),
-      project: jest.fn(() => ({
+    find: jest.fn(() => {
+      const chain: Record<string, unknown> = {};
+      chain.sort = (...args: unknown[]) => {
+        mockSort(...args);
+        return chain;
+      };
+      chain.skip = (...args: unknown[]) => {
+        mockSkip(...args);
+        return chain;
+      };
+      chain.limit = (...args: unknown[]) => {
+        mockLimit(...args);
+        return chain;
+      };
+      chain.project = () => ({
         toArray: mockFindToArray,
-      })),
-      toArray: mockFindToArray,
-    })),
+      });
+      chain.toArray = mockFindToArray;
+      return chain;
+    }),
     findOne: mockFindOne,
   })),
 }));
@@ -51,6 +64,7 @@ jest.mock('@/lib/mongo', () => ({
 const mockMaybeSingle = jest.fn();
 const mockRange = jest.fn();
 const mockIn = jest.fn();
+const mockOrder = jest.fn();
 
 jest.mock('@/lib/supabase/admin', () => ({
   createClient: jest.fn(() => ({
@@ -74,11 +88,14 @@ jest.mock('@/lib/supabase/admin', () => ({
             updated_at: '2026-01-01',
           },
         ];
-        const result = { data: rows, error: null };
+        const result = { data: rows, error: null, count: 1 };
         const chain: Record<string, unknown> = {};
         chain.select = () => chain;
         chain.eq = () => chain;
-        chain.order = () => chain;
+        chain.order = (...args: unknown[]) => {
+          mockOrder(...args);
+          return chain;
+        };
         chain.range = (...args: unknown[]) => {
           mockRange(...args);
           return Promise.resolve(result);
@@ -129,6 +146,11 @@ describe('getBookReviewPage', () => {
     mockIsMongoPrimary.mockReturnValue(false);
     mockFindToArray.mockReset();
     mockFindOne.mockReset();
+    mockSkip.mockReset();
+    mockSort.mockReset();
+    mockLimit.mockReset();
+    mockOrder.mockReset();
+    mockRange.mockReset();
     jest.resetModules();
   });
 
@@ -168,5 +190,89 @@ describe('getBookReviewPage', () => {
     expect(page.reviews[0].content).toBe('Mongo review');
     expect(page.reviews[0].user.username).toBe('Ada');
     expect(page.isAuthenticated).toBe(true);
+  });
+});
+
+describe('listPublicReviewsPage', () => {
+  afterEach(() => {
+    mockIsMongoPrimary.mockReset();
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockFindToArray.mockReset();
+    mockFindOne.mockReset();
+    mockSkip.mockReset();
+    mockSort.mockReset();
+    mockLimit.mockReset();
+    mockOrder.mockReset();
+    mockRange.mockReset();
+    jest.resetModules();
+  });
+
+  it('paginates supabase reviews by default with stats and display names', async () => {
+    mockIsMongoPrimary.mockReturnValue(false);
+    const { listPublicReviewsPage } = await import('@/lib/data/reviews');
+    const result = await listPublicReviewsPage({
+      bookId: 'b1',
+      sort: 'recent',
+      page: 1,
+      limit: 10,
+    });
+
+    expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(mockRange).toHaveBeenCalledWith(0, 9);
+    expect(result.reviews).toHaveLength(1);
+    expect(result.reviews[0].user.username).toBe('Pat');
+    expect(result.reviews[0].user.full_name).toBe('Pat');
+    expect(result.total).toBe(1);
+    expect(result.totalPages).toBe(1);
+    expect(result.stats.average).toBe(5);
+    expect(result.stats.distribution[5]).toBe(1);
+    expect(result.stats.verifiedCount).toBe(1);
+  });
+
+  it('paginates mongo reviews when primary (missing is_public ⇒ public)', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    mockFindToArray
+      .mockResolvedValueOnce([
+        {
+          _id: 'mr2',
+          book_id: 'b1',
+          user_id: 'auth2',
+          rating: 3,
+          content: 'Page 2 review',
+          // is_public intentionally omitted — must still appear
+          helpful_count: 0,
+          verified_purchase: true,
+          created_at: new Date('2026-02-01'),
+          updated_at: new Date('2026-02-01'),
+        },
+      ])
+      .mockResolvedValueOnce([
+        { rating: 5, verified_purchase: false },
+        { rating: 3, verified_purchase: true },
+      ])
+      .mockResolvedValueOnce([{ auth_user_id: 'auth2', display_name: 'Bea' }]);
+
+    const { listPublicReviewsPage } = await import('@/lib/data/reviews');
+    const result = await listPublicReviewsPage({
+      bookId: 'b1',
+      sort: 'highest',
+      page: 2,
+      limit: 5,
+    });
+
+    expect(mockSort).toHaveBeenCalledWith({ rating: -1, created_at: -1 });
+    expect(mockSkip).toHaveBeenCalledWith(5);
+    expect(mockLimit).toHaveBeenCalledWith(5);
+    expect(result.reviews).toHaveLength(1);
+    expect(result.reviews[0].is_public).toBe(true);
+    expect(result.reviews[0].user.username).toBe('Bea');
+    expect(result.page).toBe(2);
+    expect(result.limit).toBe(5);
+    expect(result.total).toBe(2);
+    expect(result.totalPages).toBe(1); // Math.max(1, ceil(2/5))
+    expect(result.stats.average).toBe(4);
+    expect(result.stats.distribution[5]).toBe(1);
+    expect(result.stats.distribution[3]).toBe(1);
+    expect(result.stats.verifiedCount).toBe(1);
   });
 });

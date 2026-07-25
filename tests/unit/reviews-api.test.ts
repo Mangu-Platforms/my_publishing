@@ -5,6 +5,7 @@ import { POST as postHelpful } from '@/app/api/reviews/[id]/helpful/route';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { listPublicReviewsPage } from '@/lib/data/reviews';
 import type { NextRequest } from 'next/server';
 
 jest.mock('next/server', () => ({
@@ -22,6 +23,18 @@ jest.mock('@/lib/rate-limit', () => ({
   enforceRateLimit: jest.fn(),
   getClientIdentifier: jest.fn(() => 'test-client'),
 }));
+jest.mock('@/lib/db/provider', () => ({
+  isMongoPrimary: jest.fn(() => false),
+  getDatabaseProvider: jest.fn(() => 'supabase'),
+}));
+jest.mock('@/lib/server-only-guard', () => ({}));
+jest.mock('@/lib/data/reviews', () => ({
+  listPublicReviewsPage: jest.fn(),
+}));
+
+const mockedListPublicReviewsPage = listPublicReviewsPage as jest.MockedFunction<
+  typeof listPublicReviewsPage
+>;
 
 const mockedCreateClient = createClient as jest.MockedFunction<typeof createClient>;
 const mockedCreateAdminClient = createAdminClient as jest.MockedFunction<typeof createAdminClient>;
@@ -112,17 +125,17 @@ describe('reviews API', () => {
       const response = await getReviews(getRequest(`https://x.test/api/reviews?bookId=${BOOK_ID}`));
 
       expect(response.status).toBe(429);
-      expect(mockedCreateAdminClient).not.toHaveBeenCalled();
+      expect(mockedListPublicReviewsPage).not.toHaveBeenCalled();
     });
 
     it('rejects an invalid bookId', async () => {
       const response = await getReviews(getRequest('https://x.test/api/reviews?bookId=nope'));
 
       expect(response.status).toBe(400);
-      expect(mockedCreateAdminClient).not.toHaveBeenCalled();
+      expect(mockedListPublicReviewsPage).not.toHaveBeenCalled();
     });
 
-    it('returns paginated reviews with stats', async () => {
+    it('returns paginated reviews with stats via listPublicReviewsPage', async () => {
       const reviewRow = {
         id: REVIEW_ID,
         book_id: BOOK_ID,
@@ -131,16 +144,31 @@ describe('reviews API', () => {
         title: 'Great',
         content: 'Loved it, highly recommended.',
         is_spoiler: false,
+        is_public: true,
         helpful_count: 2,
         verified_purchase: true,
         author_reply: null,
         author_reply_at: null,
         created_at: '2026-07-01T00:00:00Z',
         updated_at: '2026-07-01T00:00:00Z',
+        user_vote: null,
+        user: { id: USER_ID, username: 'Reader One', full_name: 'Reader One' },
       };
+      mockedListPublicReviewsPage.mockResolvedValue({
+        reviews: [reviewRow],
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
+        stats: {
+          average: 5,
+          total: 1,
+          distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
+          verifiedCount: 1,
+        },
+      });
       mockAdminByTable({
-        reviews: { data: [reviewRow], error: null, count: 1 },
-        profiles: { data: [{ user_id: USER_ID, full_name: 'Reader One' }], error: null },
+        review_votes: { data: [], error: null },
       });
 
       const response = await getReviews(
@@ -148,6 +176,12 @@ describe('reviews API', () => {
       );
 
       expect(response.status).toBe(200);
+      expect(mockedListPublicReviewsPage).toHaveBeenCalledWith({
+        bookId: BOOK_ID,
+        sort: 'recent',
+        page: 1,
+        limit: 10,
+      });
       const body = await response.json();
       expect(body.success).toBe(true);
       expect(body.data.reviews).toHaveLength(1);
@@ -156,6 +190,16 @@ describe('reviews API', () => {
       expect(body.data.stats.distribution[5]).toBe(1);
       expect(body.data.stats.verifiedCount).toBe(1);
       expect(body.data.totalPages).toBe(1);
+    });
+
+    it('returns 503 when the dual-run helper throws', async () => {
+      mockedListPublicReviewsPage.mockRejectedValue(new Error('db down'));
+
+      const response = await getReviews(getRequest(`https://x.test/api/reviews?bookId=${BOOK_ID}`));
+
+      expect(response.status).toBe(503);
+      const body = await response.json();
+      expect(body.success).toBe(false);
     });
   });
 
