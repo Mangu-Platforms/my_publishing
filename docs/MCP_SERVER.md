@@ -70,28 +70,52 @@ guarding commit removes the key requirement.
 
 ## Client configuration
 
-Already committed for this repo:
+All client configs are committed to the repo. **All require `MCP_ENABLED=true` and a
+valid `MCP_API_KEY` to connect** — clients receive `404` (disabled) or `401`
+(bad/missing key) otherwise.
 
-- **VS Code / Copilot**: `.vscode/mcp.json`
-- **Cursor**: `.cursor/mcp.json`
-- **Copilot CLI**: added to `~/.copilot/mcp-config.json`
+| Client | File | Auth |
+|--------|------|------|
+| **VS Code / GitHub Copilot** | `.vscode/mcp.json` | prompts for key via `${input:mcpApiKey}` |
+| **Cursor** | `.cursor/mcp.json` | reads `${MCP_API_KEY}` from env |
+| **Bob (IBM)** | `.bob/mcp.json` | reads `${MCP_API_KEY}` from env |
 
-Manual config for any other MCP client:
-
-When the transport is enabled, clients must send the Bearer key:
+### Template for any other MCP client
 
 ```json
 {
   "mcpServers": {
     "mangu-publishers": {
-      "type": "http",
       "url": "http://localhost:3000/api/mcp/mcp",
-      "headers": { "Authorization": "Bearer <MCP_API_KEY>" }
+      "headers": { "Authorization": "Bearer <your-MCP_API_KEY-value>" }
     }
   }
 }
 ```
 
+For production, replace `http://localhost:3000` with `https://www.mangu-publishers.com`.
+
+### Enable for local dev
+
+```bash
+# .env.local
+MCP_ENABLED=true
+MCP_API_KEY=$(openssl rand -hex 32)   # generate once; save this value for your client
+
+npm run dev
+# Verify:
+./scripts/mcp-smoke.sh http://localhost:3000 "$MCP_API_KEY"
+```
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/mcp-smoke.sh [BASE_URL] [KEY]` | Gate + health + authenticated tool call |
+| `scripts/mcp-load-check.sh [BASE_URL] [N]` | Burst test — expects 429s under rate limit |
+
 ## Adding tools
 
-Edit `app/api/mcp/[transport]/route.ts` and register more tools with `server.tool(name, description, zodSchema, handler)`.
+Edit [`app/api/mcp/[transport]/route.ts`](../app/api/mcp/[transport]/route.ts) and
+register new tools with `server.tool(name, description, zodSchema, handler)`. See
+`.claude/skills/mcp-catalog-ops/SKILL.md` for the full checklist.

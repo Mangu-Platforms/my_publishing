@@ -1,9 +1,6 @@
 import { notFound } from 'next/navigation';
-import {
-  createPublicCatalogClient,
-  PUBLIC_BOOK_SELECT,
-  PUBLIC_BOOK_WITH_CONTENT_SELECT,
-} from '@/lib/supabase/public-queries';
+// Phoenix WS2d — dual-run catalog layer
+import { fetchBookForApi, listPublishedBooks } from '@/lib/data/books';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { Button } from '@/components/ui/button';
@@ -19,40 +16,16 @@ import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import type { BookFull } from '@/types';
+import type { ApiBook } from '@/lib/data/books';
 import { getSiteUrl } from '@/lib/seo/siteUrl';
 
-async function getBook(slug: string): Promise<BookFull | null> {
-  const supabase = createPublicCatalogClient();
-  const { data } = await supabase
-    .from('books')
-    .select(PUBLIC_BOOK_WITH_CONTENT_SELECT)
-    .eq('slug', slug)
-    .eq('status', 'published')
-    .eq('visibility', 'public')
-    .eq('content_type', 'book')
-    .single();
-
-  return data as BookFull | null;
+async function getBook(slug: string): Promise<ApiBook | null> {
+  return fetchBookForApi({ slug });
 }
 
 async function getSimilarBooks(genre: string | undefined, excludeId: string) {
-  const supabase = createPublicCatalogClient();
-  let query = supabase
-    .from('books')
-    .select(PUBLIC_BOOK_SELECT)
-    .eq('status', 'published')
-    .eq('visibility', 'public')
-    .eq('content_type', 'book')
-    .neq('id', excludeId);
-
-  if (genre) {
-    query = query.eq('genre', genre);
-  }
-
-  const { data } = await query.limit(6);
-
-  return data || [];
+  const { books } = await listPublishedBooks({ genre, perPage: 7 });
+  return books.filter((b) => b.id !== excludeId).slice(0, 6);
 }
 
 const REVIEWS_PAGE_SIZE = 10;
@@ -281,7 +254,7 @@ export async function generateMetadata({
 
   const description =
     book.description ||
-    `Read ${book.title} by ${book.author?.profile?.full_name || book.author?.pen_name || 'Unknown Author'}`;
+    `Read ${book.title} by ${(book.author as Record<string, unknown> | undefined)?.['pen_name'] as string ?? 'Unknown Author'}`;
   const pageUrl = `${getSiteUrl()}/books/${params.slug}`;
 
   return {
@@ -315,8 +288,13 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
     notFound();
   }
 
-  const similarBooks = await getSimilarBooks(book.genre, book.id);
+  const similarBooks = await getSimilarBooks(book.genre ?? undefined, book.id);
   const reviewData = await getReviewData(book.id, book.author_id);
+
+  // Normalise field names: ApiBook uses avg_rating; legacy Supabase shape uses average_rating
+  const avgRating = (book.avg_rating ?? (book as Record<string, unknown>)['average_rating']) as number | undefined;
+  const trailerVimeoId = (book as Record<string, unknown>)['trailer_vimeo_id'] as string | undefined;
+  const audioUrl = (book as Record<string, unknown>)['audio_url'] as string | undefined;
 
   return (
     <div>
@@ -339,26 +317,27 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
               <h1 className="mb-4 text-4xl font-bold">{book.title}</h1>
               <p className="mb-4 text-xl text-secondary">
                 by{' '}
-                {book.author ? (
-                  <Link href={`/authors/${book.author.id}`} className="hover:text-primary">
-                    {book.author.profile?.full_name || book.author.pen_name || 'Unknown Author'}
+                {book.author_id ? (
+                  <Link href={`/authors/${book.author_id}`} className="hover:text-primary">
+                    {(book.author as Record<string, unknown> | undefined)?.['pen_name'] as string ?? 'Unknown Author'}
                   </Link>
                 ) : (
                   <span>Unknown Author</span>
                 )}
-                {book.author && <FollowAuthorButton authorId={book.author.id} className="ml-3" />}
+                {book.author_id && (
+                  <FollowAuthorButton authorId={book.author_id} className="ml-3" />
+                )}
               </p>
               <div className="mb-6 flex items-center gap-4">
-                {book.average_rating && (
+                {avgRating ? (
                   <>
                     <div className="flex items-center gap-1">
                       <span className="text-yellow-400">★</span>
-                      <span>{book.average_rating.toFixed(1)}</span>
+                      <span>{Number(avgRating).toFixed(1)}</span>
                     </div>
                     <span className="text-secondary">•</span>
                   </>
-                )}
-                <span className="text-secondary">{book.total_reads || 0} reads</span>
+                ) : null}
               </div>
               <p className="mb-6 text-lg">{book.description}</p>
               <div className="mb-6 flex gap-4">
@@ -370,64 +349,6 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
                 </Button>
                 <WishlistButton bookId={book.id} />
               </div>
-              {(book.amazon_url ||
-                book.kindle_url ||
-                book.apple_books_url ||
-                book.audible_url ||
-                book.barnes_noble_url ||
-                book.google_play_books_url) && (
-                <div className="mb-6">
-                  <p className="mb-2 text-sm font-medium text-secondary">Also available at</p>
-                  <div className="flex flex-wrap gap-3">
-                    {book.amazon_url && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={book.amazon_url} target="_blank" rel="noopener noreferrer">
-                          Buy on Amazon
-                        </a>
-                      </Button>
-                    )}
-                    {book.kindle_url && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={book.kindle_url} target="_blank" rel="noopener noreferrer">
-                          Buy on Kindle
-                        </a>
-                      </Button>
-                    )}
-                    {book.apple_books_url && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={book.apple_books_url} target="_blank" rel="noopener noreferrer">
-                          Apple Books
-                        </a>
-                      </Button>
-                    )}
-                    {book.audible_url && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={book.audible_url} target="_blank" rel="noopener noreferrer">
-                          Audible
-                        </a>
-                      </Button>
-                    )}
-                    {book.barnes_noble_url && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={book.barnes_noble_url} target="_blank" rel="noopener noreferrer">
-                          Barnes &amp; Noble
-                        </a>
-                      </Button>
-                    )}
-                    {book.google_play_books_url && (
-                      <Button asChild variant="outline" size="sm">
-                        <a
-                          href={book.google_play_books_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Google Play Books
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
               <div className="text-2xl font-bold">
                 {book.discount_price ? (
                   <>
@@ -453,9 +374,9 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
               <TabsTrigger value="reviews">Reviews</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="mt-6">
-              {(book as BookFull).trailer_vimeo_id && (
+              {trailerVimeoId && (
                 <div className="mb-8">
-                  <VimeoPlayer videoId={(book as BookFull).trailer_vimeo_id!} />
+                  <VimeoPlayer videoId={trailerVimeoId} />
                 </div>
               )}
               <div>
@@ -464,8 +385,8 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
               </div>
             </TabsContent>
             <TabsContent value="audio" className="mt-6">
-              {book.content?.audio_url ? (
-                <AudioPlayer src={book.content.audio_url} title="Audio Sample" />
+              {audioUrl ? (
+                <AudioPlayer src={audioUrl} title="Audio Sample" />
               ) : (
                 <p className="text-secondary">No audio sample available.</p>
               )}
@@ -493,7 +414,7 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
             <h2 className="mb-8 text-3xl font-bold">Similar Books</h2>
             <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
               {similarBooks.map((similarBook) => (
-                <BookCard key={similarBook.id} book={similarBook} />
+                <BookCard key={similarBook.id} book={similarBook as never} />
               ))}
             </div>
           </Container>

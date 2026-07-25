@@ -40,7 +40,22 @@ export type { BookMetadata, CreateBookInput, UpdateBookInput, BookSearchResult }
 export type { BookStats as AnalyticsBookStats } from './analytics';
 
 // Database types (Supabase generated - you may need to regenerate these)
-export type { Database } from './database';
+export type {
+  Database,
+  BookWithAuthor,
+  BookFull,
+  BookWithContent,
+  BookStatus,
+  UserRole,
+  Profile,
+  Author,
+  Book,
+  BookContent,
+  Order,
+  OrderItem,
+  OrderWithItems,
+  ManuscriptWithAuthor,
+} from './database';
 
 // Phoenix Mongo document types (WS2a) — aliased to avoid clashing with legacy shapes above
 export type {

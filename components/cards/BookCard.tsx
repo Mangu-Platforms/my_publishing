@@ -1,16 +1,35 @@
 /* eslint-disable */
+// Phoenix WS2d — accepts both legacy BookWithAuthor and dual-run ApiBook shapes
 'use client';
 
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { BookWithAuthor } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/utils/cn';
+
+/** Minimal shape required by BookCard — compatible with both Supabase and Mongo ApiBook. */
+export interface BookCardBook {
+  id: string;
+  title: string;
+  slug: string;
+  cover_url?: string | null;
+  price?: number | null;
+  discount_price?: number | null;
+  /** Supabase shape: average_rating. Mongo/ApiBook shape: avg_rating. Both optional. */
+  average_rating?: number;
+  avg_rating?: number;
+  is_featured?: boolean;
+  author?: {
+    pen_name?: string | null;
+    full_name?: string | null;
+    profile?: { full_name?: string | null } | null;
+  } | null;
+  [key: string]: unknown;
+}
 
 interface BookCardProps {
-  book: BookWithAuthor;
+  book: BookCardBook;
   variant?: 'default' | 'compact';
   href?: string;
 }
@@ -22,6 +41,8 @@ export function BookCard({ book, variant = 'default', href }: BookCardProps) {
     book.author?.full_name ||
     'Unknown Author';
   const bookHref = href ?? `/books/${book.slug}`;
+  // Support both Supabase (average_rating) and Mongo/ApiBook (avg_rating) field names
+  const displayRating = book.average_rating ?? book.avg_rating;
 
   if (variant === 'compact') {
     return (
@@ -77,12 +98,12 @@ export function BookCard({ book, variant = 'default', href }: BookCardProps) {
             </h3>
             <p className="mb-2 line-clamp-1 text-sm text-muted-foreground">{authorName}</p>
             <div className="flex items-center justify-between">
-              {book.average_rating ? (
+              {displayRating ? (
                 <div className="flex items-center gap-1">
                   <span className="text-yellow-400" aria-hidden="true">
                     ★
                   </span>
-                  <span className="text-sm">{(book.average_rating || 0).toFixed(1)}</span>
+                  <span className="text-sm">{Number(displayRating).toFixed(1)}</span>
                 </div>
               ) : (
                 <div />

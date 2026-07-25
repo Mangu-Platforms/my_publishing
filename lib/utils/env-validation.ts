@@ -217,6 +217,40 @@ const envConfigs: EnvConfig[] = [
     required: false,
     description: 'Server-only Sentry DSN (optional; defaults to NEXT_PUBLIC_SENTRY_DSN)',
   },
+  // Phoenix WS3 — Vercel Blob
+  {
+    name: 'BLOB_READ_WRITE_TOKEN',
+    required: false,
+    description: 'Vercel Blob read/write token (required when STORAGE_PROVIDER=vercel-blob)',
+    validate: (value) => {
+      if (value && value.length < 20) {
+        return 'BLOB_READ_WRITE_TOKEN appears too short';
+      }
+      return true;
+    },
+  },
+  {
+    name: 'STORAGE_PROVIDER',
+    required: false,
+    description: 'Storage provider: supabase (default) or vercel-blob (Phoenix WS3)',
+    validate: (value) => {
+      if (!['supabase', 'vercel-blob', 'blob'].includes(value.toLowerCase())) {
+        return 'Must be supabase or vercel-blob';
+      }
+      return true;
+    },
+  },
+  {
+    name: 'DATABASE_PROVIDER',
+    required: false,
+    description: 'Database provider: supabase (default) or mongodb (Phoenix cutover)',
+    validate: (value) => {
+      if (!['supabase', 'mongodb', 'mongo'].includes(value.toLowerCase())) {
+        return 'Must be supabase or mongodb';
+      }
+      return true;
+    },
+  },
 ];
 
 /**
@@ -289,6 +323,14 @@ export function validateEnvironment(): EnvValidationResult {
     warnings.push(
       'Upstash Redis not configured — distributed rate limiting disabled in production'
     );
+  }
+
+  // Phoenix WS3: Blob token required when storage provider is vercel-blob.
+  const storageProvider = (process.env.STORAGE_PROVIDER || 'supabase').toLowerCase();
+  if (storageProvider === 'vercel-blob' || storageProvider === 'blob') {
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      missing.push('BLOB_READ_WRITE_TOKEN');
+    }
   }
 
   // ADR-002: Mongo is additive until cutover; warn in production if unset.

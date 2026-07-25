@@ -1,5 +1,5 @@
-// PERF-PHASE2-1
-import { getBooksPage } from '@/lib/supabase/queries';
+// PERF-PHASE2-1 · Phoenix WS2d — dual-run data layer
+import { listPublishedBooks } from '@/lib/data/books';
 import { BookListItem } from './BookListItem';
 
 interface BookListStreamProps {
@@ -14,16 +14,15 @@ interface BookListStreamProps {
 }
 
 export async function BookListStream({
-  contentType,
+  contentType: _contentType,
   searchParams,
   emptyMessage,
 }: BookListStreamProps) {
-  const books = await getBooksPage({
-    contentType,
-    q: searchParams.q,
+  const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
+  const { books } = await listPublishedBooks({
     genre: searchParams.genre,
-    sort: searchParams.sort,
-    page: searchParams.page,
+    page,
+    perPage: 20,
   });
 
   if (books.length === 0) {
