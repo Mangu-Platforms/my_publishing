@@ -30,12 +30,14 @@ jest.mock('@/lib/supabase/genre-counts', () => ({
 
 const mockGetBookById = jest.fn();
 const mockGetBookBySlug = jest.fn();
+const mockSearchBooks = jest.fn();
 
 jest.mock('@/lib/mongo-queries', () => ({
   createBook: jest.fn(),
   getBookById: (...args: unknown[]) => mockGetBookById(...args),
   getBookBySlug: (...args: unknown[]) => mockGetBookBySlug(...args),
   getBooks: jest.fn(),
+  searchBooks: (...args: unknown[]) => mockSearchBooks(...args),
   updateBook: jest.fn(),
 }));
 
@@ -200,6 +202,79 @@ describe('getPlatformStats dual-run', () => {
     mockCountDocuments.mockResolvedValueOnce(7).mockResolvedValueOnce(2);
     const { getPlatformStats } = await import('@/lib/data/stats');
     await expect(getPlatformStats()).resolves.toEqual({ books: 7, authors: 2 });
+  });
+});
+
+describe('listPublishedBooks search + sort', () => {
+  afterEach(() => {
+    mockIsMongoPrimary.mockReset();
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockSearchBooks.mockReset();
+    mockAggregateToArray.mockReset();
+    jest.resetModules();
+  });
+
+  it('uses Mongo searchBooks when q is set', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    mockSearchBooks.mockResolvedValue({
+      items: [
+        {
+          _id: 's1',
+          title: 'Search Hit',
+          slug: 'search-hit',
+          author_id: 'a1',
+          status: 'published',
+          visibility: 'public',
+          genre: 'Fiction',
+        },
+      ],
+      total: 1,
+      page: 1,
+      perPage: 20,
+    });
+
+    const { listPublishedBooks } = await import('@/lib/data/books');
+    const result = await listPublishedBooks({ q: 'Search', page: 1 });
+    expect(mockSearchBooks).toHaveBeenCalledWith(
+      'Search',
+      expect.objectContaining({ status: 'published', visibility: 'public' })
+    );
+    expect(result.books[0].title).toBe('Search Hit');
+  });
+});
+
+describe('listFeaturedAuthors dual-run', () => {
+  afterEach(() => {
+    mockIsMongoPrimary.mockReset();
+    mockIsMongoPrimary.mockReturnValue(false);
+    jest.resetModules();
+  });
+
+  it('queries verified authors from Mongo when primary', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    const mockFind = jest.fn(() => ({
+      sort: jest.fn(() => ({
+        limit: jest.fn(() => ({
+          toArray: jest.fn(async () => [
+            {
+              _id: 'a1',
+              pen_name: 'Ada',
+              bio: null,
+              total_books: 3,
+              is_verified: true,
+            },
+          ]),
+        })),
+      })),
+    }));
+    mockGetDb.mockResolvedValueOnce({
+      collection: jest.fn(() => ({ find: mockFind })),
+    });
+
+    const { listFeaturedAuthors } = await import('@/lib/data/authors');
+    const authors = await listFeaturedAuthors(4);
+    expect(authors).toHaveLength(1);
+    expect(authors[0].pen_name).toBe('Ada');
   });
 });
 

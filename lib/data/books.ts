@@ -8,7 +8,13 @@ import '@/lib/server-only-guard';
 import { createClient } from '@/lib/supabase/server';
 import { isMongoPrimary } from '@/lib/db/provider';
 import { slugifyGenre } from '@/lib/utils/genre';
-import { createBook, getBookById, getBookBySlug, getBooks, updateBook } from '@/lib/mongo-queries';
+import {
+  createBook,
+  getBookById,
+  getBookBySlug,
+  searchBooks,
+  updateBook,
+} from '@/lib/mongo-queries';
 
 export type ApiBook = {
   id: string;
@@ -28,6 +34,14 @@ export type ApiBook = {
   [key: string]: unknown;
 };
 
+const BROWSE_SORT_KEYS = new Set([
+  'published_at',
+  'total_reads',
+  'average_rating',
+  'price',
+  'title',
+]);
+
 function slugify(title: string): string {
   return title
     .toLowerCase()
@@ -37,40 +51,140 @@ function slugify(title: string): string {
     .slice(0, 80);
 }
 
+function mapBookWithAuthor(b: {
+  _id: unknown;
+  title: string;
+  slug: string;
+  description?: string | null;
+  genre?: string | null;
+  price?: number | null;
+  status?: string;
+  visibility?: string;
+  cover_url?: string | null;
+  author_id?: unknown;
+  avg_rating?: number;
+  review_count?: number;
+  created_at?: Date | string;
+  author?: { _id?: unknown; pen_name?: string | null } | null;
+}): ApiBook {
+  return {
+    id: String(b._id),
+    title: b.title,
+    slug: b.slug,
+    description: b.description ?? null,
+    genre: b.genre ?? null,
+    price: b.price ?? null,
+    status: b.status,
+    visibility: b.visibility,
+    cover_url: b.cover_url ?? null,
+    author_id: b.author_id != null ? String(b.author_id) : undefined,
+    avg_rating: b.avg_rating,
+    review_count: b.review_count,
+    created_at:
+      b.created_at instanceof Date ? b.created_at.toISOString() : String(b.created_at ?? ''),
+    author: b.author ? { id: String(b.author._id), full_name: b.author.pen_name } : null,
+  };
+}
+
+/** Map UI sort keys (Supabase columns) onto Mongo Book fields. */
+function mongoSortForBrowse(sort: string): { field: string; ascending: boolean } {
+  switch (sort) {
+    case 'price':
+      return { field: 'price', ascending: true };
+    case 'title':
+      return { field: 'title', ascending: true };
+    case 'average_rating':
+      return { field: 'avg_rating', ascending: false };
+    case 'total_reads':
+      // Mongo has no total_reads yet — review_count is the closest signal.
+      return { field: 'review_count', ascending: false };
+    case 'published_at':
+    default:
+      return { field: 'created_at', ascending: false };
+  }
+}
+
 export async function listPublishedBooks(opts: {
   page?: number;
   perPage?: number;
   genre?: string;
+  q?: string;
+  sort?: string;
 }): Promise<{ books: ApiBook[]; total: number; page: number; perPage: number }> {
   const page = opts.page ?? 1;
   const perPage = opts.perPage ?? 20;
+  const q = opts.q?.trim() || undefined;
+  const sort = BROWSE_SORT_KEYS.has(opts.sort ?? '') ? (opts.sort as string) : 'published_at';
 
   if (isMongoPrimary()) {
-    const result = await getBooks(
-      { status: 'published', visibility: 'public', genre: opts.genre },
-      { page, perPage }
-    );
+    if (q) {
+      const result = await searchBooks(q, {
+        status: 'published',
+        visibility: 'public',
+        page,
+        perPage,
+      });
+      // searchBooks sorts by text score; genre filter applied in-memory for parity.
+      let items = result.items;
+      if (opts.genre) {
+        items = items.filter((b) => b.genre === opts.genre);
+      }
+      return {
+        books: items.map(mapBookWithAuthor),
+        total: opts.genre ? items.length : result.total,
+        page: result.page,
+        perPage: result.perPage,
+      };
+    }
+
+    const { field, ascending } = mongoSortForBrowse(sort);
+    const { getDb } = await import('@/lib/mongo');
+    const db = await getDb();
+    const match: Record<string, unknown> = {
+      status: 'published',
+      visibility: 'public',
+    };
+    if (opts.genre) match.genre = opts.genre;
+
+    const skip = (page - 1) * perPage;
+    const [facet] = await db
+      .collection('books')
+      .aggregate([
+        { $match: match },
+        {
+          $facet: {
+            items: [
+              { $sort: { [field]: ascending ? 1 : -1, _id: 1 } },
+              { $skip: skip },
+              { $limit: perPage },
+              {
+                $lookup: {
+                  from: 'authors',
+                  localField: 'author_id',
+                  foreignField: '_id',
+                  as: '_authors',
+                },
+              },
+              {
+                $addFields: {
+                  author: { $ifNull: [{ $arrayElemAt: ['$_authors', 0] }, null] },
+                },
+              },
+              { $project: { _authors: 0 } },
+            ],
+            total: [{ $count: 'count' }],
+          },
+        },
+      ])
+      .toArray();
+
+    const items = (facet?.items ?? []) as Parameters<typeof mapBookWithAuthor>[0][];
+    const total = Number(facet?.total?.[0]?.count ?? 0);
     return {
-      books: result.items.map((b) => ({
-        id: String(b._id),
-        title: b.title,
-        slug: b.slug,
-        description: b.description ?? null,
-        genre: b.genre ?? null,
-        price: b.price ?? null,
-        status: b.status,
-        visibility: b.visibility,
-        cover_url: b.cover_url ?? null,
-        author_id: String(b.author_id),
-        avg_rating: b.avg_rating,
-        review_count: b.review_count,
-        created_at:
-          b.created_at instanceof Date ? b.created_at.toISOString() : String(b.created_at ?? ''),
-        author: b.author ? { id: String(b.author._id), full_name: b.author.pen_name } : null,
-      })),
-      total: result.total,
-      page: result.page,
-      perPage: result.perPage,
+      books: items.map(mapBookWithAuthor),
+      total,
+      page,
+      perPage,
     };
   }
 
@@ -80,9 +194,15 @@ export async function listPublishedBooks(opts: {
     .select('*', { count: 'exact' })
     .eq('status', 'published')
     .eq('visibility', 'public')
-    .order('created_at', { ascending: false })
     .range((page - 1) * perPage, page * perPage - 1);
   if (opts.genre) query = query.eq('genre', opts.genre);
+  if (q) query = query.textSearch('title', q, { type: 'websearch' });
+
+  const ascending = sort === 'price' || sort === 'title';
+  // Prefer published_at (catalog UX); fall back to created_at if column missing at runtime.
+  query = query.order(sort === 'published_at' ? 'published_at' : sort, {
+    ascending: sort === 'published_at' ? false : ascending,
+  });
 
   const { data, error, count } = await query;
   if (error) throw new Error(error.message);

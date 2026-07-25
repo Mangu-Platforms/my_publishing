@@ -21,6 +21,8 @@ export async function BookListStream({
   const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
   const { books } = await listPublishedBooks({
     genre: searchParams.genre,
+    q: searchParams.q,
+    sort: searchParams.sort,
     page,
     perPage: 20,
   });
