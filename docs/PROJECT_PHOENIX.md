@@ -2,10 +2,10 @@
 
 ## Mangu Publishers — Stack Modernization Master Document
 
-**Document Version:** 4.0.1 (Implementation-Locked Edition)  
+**Document Version:** 4.0.2 (Phase 11 Executable Edition)  
 **Status:** 🟡 IN PROGRESS — ACTIVE (owner-reactivated 2026-07-20)  
 **Classification:** CONFIDENTIAL — For Authorized Personnel Only  
-**Last Updated:** July 20, 2026  
+**Last Updated:** July 25, 2026  
 **Document Owner:** Project Lead  
 **Repository:** `redinc23/my_publishing` · **Migration Branch:** `cursor/mongodb-scaffold-dffa`  
 **Production Domain:** `https://www.mangu-publishers.com` (apex `mangu-publishers.com` → 301 → `www`)
@@ -17,11 +17,11 @@
 
 ### v4.0.1 amendments (2026-07-20)
 
-| ID  | Amendment                                                                                                                                 |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| D9  | RBAC roles are `reader \| author \| partner \| admin` (live product). Doc references to `editor` mean `partner` for portal/ARC parity.    |
-| D2  | Mongo helper lives at `lib/mongodb.ts` exporting `getDb()` (not `lib/mongo.ts`).                                                         |
-| D4  | Prefer `NEXT_PUBLIC_SITE_URL` over inventing `NEXT_PUBLIC_APP_URL`; `BETTER_AUTH_URL` may mirror site URL.                               |
+| ID  | Amendment                                                                                                                                                                                                         |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D9  | RBAC roles are `reader \| author \| partner \| admin` (live product). Doc references to `editor` mean `partner` for portal/ARC parity.                                                                            |
+| D2  | Mongo helper lives at `lib/mongodb.ts` exporting `getDb()` (not `lib/mongo.ts`).                                                                                                                                  |
+| D4  | Prefer `NEXT_PUBLIC_SITE_URL` over inventing `NEXT_PUBLIC_APP_URL`; `BETTER_AUTH_URL` may mirror site URL.                                                                                                        |
 | —   | **Public dual-run:** `AUTH_PROVIDER=supabase\|better-auth` (default `supabase`). WS1 lands Better Auth code paths; production stays on Supabase Auth until Phase 11–12 cutover so the site keeps serving readers. |
 
 ---
@@ -353,15 +353,15 @@ This section is the **primary handoff guide for engineering**. Each workstream c
 **PR #1** — Auth Layer Replacement  
 **Risk Level:** 🔴 HIGH
 
-| Task #  | Action                           | Subtasks                                                                                                                                                                                                                                                                                                                        | Files                                                          | Verification                                                 |
-| ------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
+| Task #  | Action                           | Subtasks                                                                                                                                                                                                                                                                                                                         | Files                                                          | Verification                                                 |
+| ------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
 | **1.1** | **Setup Better Auth Server**     | 1.1.1 Install `better-auth` <br> 1.1.2 Configure MongoDB adapter <br> 1.1.3 Enable `emailAndPassword` with `requireEmailVerification: true` <br> 1.1.4 Configure Resend for `sendVerificationEmail` / `sendResetPassword` <br> 1.1.5 Define `user.additionalFields.role` (`reader`/`author`/`partner`/`admin`, default `reader`) | `lib/auth.ts`                                                  | `getAuth()` returns configured instance                      |
-| **1.2** | **Setup Better Auth Client**     | 1.2.1 Install `better-auth/react` <br> 1.2.2 Create client instance <br> 1.2.3 Export typed hooks (`useSession`)                                                                                                                                                                                                                | `lib/auth-client.ts`                                           | Client imports resolve correctly                             |
-| **1.3** | **Create Auth API Route**        | 1.3.1 Implement catch-all route <br> 1.3.2 Export GET/POST handlers <br> 1.3.3 Configure CORS & headers                                                                                                                                                                                                                         | `app/api/auth/[...all]/route.ts`                               | `/api/auth/ok` returns 200                                   |
-| **1.4** | **Rewrite Middleware**           | 1.4.1 Parse Better Auth session cookie <br> 1.4.2 Define public vs protected route matcher <br> 1.4.3 Implement role-based redirects (`/admin` → admin only; `/dashboard/author` → author+) <br> 1.4.4 Graceful redirect to `/login?next=<path>` with return URL                                                                | `middleware.ts`                                                | Unauthenticated `/dashboard` redirects to `/login`           |
-| **1.5** | **Migrate Auth Actions**         | 1.5.1 Rewrite `signIn` server action <br> 1.5.2 Rewrite `signUp` + auto-create `profiles` doc <br> 1.5.3 Rewrite `resetPassword` action <br> 1.5.4 Rewrite `verifyEmail` action                                                                                                                                                 | `app/(auth)/actions.ts`                                        | End-to-end auth flows pass locally                           |
-| **1.6** | **Profile Sync Hook**            | 1.6.1 Create Better Auth `databaseHooks.user.create.after` hook <br> 1.6.2 Auto-insert document into `profiles` collection                                                                                                                                                                                                      | `lib/auth.ts`                                                  | Signup results in both `user` and `profiles` docs            |
-| **1.7** | **Forced Reset Transition Flow** | 1.7.1 Add `requestPasswordReset` wrapper callable from migration script <br> 1.7.2 Build branded "Welcome to the new Mangu" reset email template (Resend) <br> 1.7.3 Add `/login` banner copy: "Legacy user? Check your inbox to set a new password." <br> 1.7.4 Instrument reset-requested / reset-completed events            | `lib/auth.ts`, `emails/reset.tsx`, `app/(auth)/login/page.tsx` | Test legacy-import user completes reset + sign-in on staging |
+| **1.2** | **Setup Better Auth Client**     | 1.2.1 Install `better-auth/react` <br> 1.2.2 Create client instance <br> 1.2.3 Export typed hooks (`useSession`)                                                                                                                                                                                                                 | `lib/auth-client.ts`                                           | Client imports resolve correctly                             |
+| **1.3** | **Create Auth API Route**        | 1.3.1 Implement catch-all route <br> 1.3.2 Export GET/POST handlers <br> 1.3.3 Configure CORS & headers                                                                                                                                                                                                                          | `app/api/auth/[...all]/route.ts`                               | `/api/auth/ok` returns 200                                   |
+| **1.4** | **Rewrite Middleware**           | 1.4.1 Parse Better Auth session cookie <br> 1.4.2 Define public vs protected route matcher <br> 1.4.3 Implement role-based redirects (`/admin` → admin only; `/dashboard/author` → author+) <br> 1.4.4 Graceful redirect to `/login?next=<path>` with return URL                                                                 | `middleware.ts`                                                | Unauthenticated `/dashboard` redirects to `/login`           |
+| **1.5** | **Migrate Auth Actions**         | 1.5.1 Rewrite `signIn` server action <br> 1.5.2 Rewrite `signUp` + auto-create `profiles` doc <br> 1.5.3 Rewrite `resetPassword` action <br> 1.5.4 Rewrite `verifyEmail` action                                                                                                                                                  | `app/(auth)/actions.ts`                                        | End-to-end auth flows pass locally                           |
+| **1.6** | **Profile Sync Hook**            | 1.6.1 Create Better Auth `databaseHooks.user.create.after` hook <br> 1.6.2 Auto-insert document into `profiles` collection                                                                                                                                                                                                       | `lib/auth.ts`                                                  | Signup results in both `user` and `profiles` docs            |
+| **1.7** | **Forced Reset Transition Flow** | 1.7.1 Add `requestPasswordReset` wrapper callable from migration script <br> 1.7.2 Build branded "Welcome to the new Mangu" reset email template (Resend) <br> 1.7.3 Add `/login` banner copy: "Legacy user? Check your inbox to set a new password." <br> 1.7.4 Instrument reset-requested / reset-completed events             | `lib/auth.ts`, `emails/reset.tsx`, `app/(auth)/login/page.tsx` | Test legacy-import user completes reset + sign-in on staging |
 
 ---
 
@@ -370,15 +370,15 @@ This section is the **primary handoff guide for engineering**. Each workstream c
 **PRs #2a through #2d** — Incremental Data Layer Replacement  
 **Risk Level:** 🟡 MEDIUM
 
-| Task #   | Action                      | Subtasks                                                                                                                                                                                                                                                                                                                                             | Files                                  | Verification                                                                   |
-| -------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------ |
+| Task #   | Action                      | Subtasks                                                                                                                                                                                                                                                                                                                                             | Files                                                   | Verification                                                                   |
+| -------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | **2a.1** | **MongoDB Connection**      | 2a.1.1 Install `mongodb` driver <br> 2a.1.2 Create global singleton cached client <br> 2a.1.3 Implement connection error handling                                                                                                                                                                                                                    | `lib/mongodb.ts` (+ `lib/mongo.ts` re-export; recon D2) | `getDb()` returns valid `Db` instance                                          |
-| **2a.2** | **Type Definitions**        | 2a.2.1 Define `Profile`, `Book`, `Author` interfaces <br> 2a.2.2 Define embedded `OrderItem` type <br> 2a.2.3 Define `Review`, `ReadingProgress`, `AuditLog` types <br> 2a.2.4 Export from central types index                                                                                                                                       | `types/mongo.ts`                       | `tsc --noEmit` passes                                                          |
-| **2a.3** | **Query Library**           | 2a.3.1 Implement `getBooks` (aggregation w/ author lookup) <br> 2a.3.2 Implement `getBookBySlug` <br> 2a.3.3 Implement `getUserOrders` <br> 2a.3.4 Implement full-text search query (`$text` w/ score sort)                                                                                                                                          | `lib/mongo-queries.ts`                 | Mock tests pass                                                                |
-| **2b.1** | **API Routes Refactor**     | 2b.1.1 `app/api/books/route.ts` (GET list, POST create) <br> 2b.1.2 `app/api/books/[id]/route.ts` (GET, PATCH) <br> 2b.1.3 `app/api/checkout/route.ts` (Create Stripe session) <br> 2b.1.4 `app/api/webhook/route.ts` — verify Stripe signature; **upsert order by `stripe_payment_intent_id` (idempotent; unique index)**; return 200 on duplicates | `app/api/**/*.ts`                      | API endpoints return correct JSON; replayed webhook creates no duplicate order |
-| **2c.1** | **Server Actions Refactor** | 2c.1.1 `lib/actions/books.ts` → `insertOne` / `updateOne` <br> 2c.1.2 `lib/actions/reviews.ts` → `insertOne` + **atomic recompute of `books.avg_rating`/`review_count`** <br> 2c.1.3 `lib/actions/profiles.ts` → `updateOne` <br> 2c.1.4 Call `revalidatePath`/`revalidateTag` after every mutation                                                  | `lib/actions/*.ts`                     | Form submissions succeed; caches invalidate                                    |
-| **2c.2** | **Audit Log Writer**        | 2c.2.1 Create `lib/audit.ts` (`recordAudit(actorId, action, target, metadata)`) <br> 2c.2.2 Wire into admin actions: role change, suspend, content approve <br> 2c.2.3 Index `audit_logs(actor_id, created_at)`                                                                                                                                      | `lib/audit.ts`, `lib/actions/admin.ts` | Admin action produces `audit_logs` document                                    |
-| **2d.1** | **Pages & Components**      | 2d.1.1 Update `app/(shop)/books/page.tsx` imports <br> 2d.1.2 Update `app/(dashboard)/page.tsx` data fetching <br> 2d.1.3 Update `components/BookCard.tsx` props mapping                                                                                                                                                                             | `app/**/*.tsx`, `components/**/*.tsx`  | App renders without type errors                                                |
+| **2a.2** | **Type Definitions**        | 2a.2.1 Define `Profile`, `Book`, `Author` interfaces <br> 2a.2.2 Define embedded `OrderItem` type <br> 2a.2.3 Define `Review`, `ReadingProgress`, `AuditLog` types <br> 2a.2.4 Export from central types index                                                                                                                                       | `types/mongo.ts`                                        | `tsc --noEmit` passes                                                          |
+| **2a.3** | **Query Library**           | 2a.3.1 Implement `getBooks` (aggregation w/ author lookup) <br> 2a.3.2 Implement `getBookBySlug` <br> 2a.3.3 Implement `getUserOrders` <br> 2a.3.4 Implement full-text search query (`$text` w/ score sort)                                                                                                                                          | `lib/mongo-queries.ts`                                  | Mock tests pass                                                                |
+| **2b.1** | **API Routes Refactor**     | 2b.1.1 `app/api/books/route.ts` (GET list, POST create) <br> 2b.1.2 `app/api/books/[id]/route.ts` (GET, PATCH) <br> 2b.1.3 `app/api/checkout/route.ts` (Create Stripe session) <br> 2b.1.4 `app/api/webhook/route.ts` — verify Stripe signature; **upsert order by `stripe_payment_intent_id` (idempotent; unique index)**; return 200 on duplicates | `app/api/**/*.ts`                                       | API endpoints return correct JSON; replayed webhook creates no duplicate order |
+| **2c.1** | **Server Actions Refactor** | 2c.1.1 `lib/actions/books.ts` → `insertOne` / `updateOne` <br> 2c.1.2 `lib/actions/reviews.ts` → `insertOne` + **atomic recompute of `books.avg_rating`/`review_count`** <br> 2c.1.3 `lib/actions/profiles.ts` → `updateOne` <br> 2c.1.4 Call `revalidatePath`/`revalidateTag` after every mutation                                                  | `lib/actions/*.ts`                                      | Form submissions succeed; caches invalidate                                    |
+| **2c.2** | **Audit Log Writer**        | 2c.2.1 Create `lib/audit.ts` (`recordAudit(actorId, action, target, metadata)`) <br> 2c.2.2 Wire into admin actions: role change, suspend, content approve <br> 2c.2.3 Index `audit_logs(actor_id, created_at)`                                                                                                                                      | `lib/audit.ts`, `lib/actions/admin.ts`                  | Admin action produces `audit_logs` document                                    |
+| **2d.1** | **Pages & Components**      | 2d.1.1 Update `app/(shop)/books/page.tsx` imports <br> 2d.1.2 Update `app/(dashboard)/page.tsx` data fetching <br> 2d.1.3 Update `components/BookCard.tsx` props mapping                                                                                                                                                                             | `app/**/*.tsx`, `components/**/*.tsx`                   | App renders without type errors                                                |
 
 ---
 
@@ -514,38 +514,84 @@ Est.    30m       15m        15m    1h+dry   ~3h       30m       2h
 
 #### P11.1 — EXPORT (from Supabase via `psql`)
 
-> v3.0 used invalid `SELECT ... INTO file.json` syntax. The correct export uses `COPY ... TO` with `json_agg`:
+> **v4.0.2:** implemented as `scripts/export-supabase.sh` (`npm run phoenix:export`).
+> The v4.0 snippet below was corrected in three ways after being checked against
+> `supabase/migrations/` — see the v4.0.2 amendment table in §DOCUMENT CONTROL.
 
 ```bash
-# auth.users
-psql "$SUPABASE_DB_URL" -c "\copy (SELECT json_agg(row_to_json(t)) FROM (SELECT id, email, email_confirmed_at, created_at, raw_user_meta_data FROM auth.users) t) TO 'export/auth_users.json'"
-
-# profiles
-psql "$SUPABASE_DB_URL" -c "\copy (SELECT json_agg(row_to_json(t)) FROM (SELECT * FROM public.profiles) t) TO 'export/profiles.json'"
-
-# authors
-psql "$SUPABASE_DB_URL" -c "\copy (SELECT json_agg(row_to_json(t)) FROM (SELECT * FROM public.authors) t) TO 'export/authors.json'"
-
-# books
-psql "$SUPABASE_DB_URL" -c "\copy (SELECT json_agg(row_to_json(t)) FROM (SELECT * FROM public.books) t) TO 'export/books.json'"
-
-# orders (with join)
-psql "$SUPABASE_DB_URL" -c "\copy (SELECT json_agg(row_to_json(t)) FROM (SELECT o.*, oi.book_id, oi.quantity, oi.price_cents FROM public.orders o JOIN public.order_items oi ON o.id = oi.order_id) t) TO 'export/orders_raw.json'"
-
-# reviews & reading_progress (if present)
-psql "$SUPABASE_DB_URL" -c "\copy (SELECT json_agg(row_to_json(t)) FROM (SELECT * FROM public.reviews) t) TO 'export/reviews.json'"
+export SUPABASE_DB_URL='postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres'
+npm run phoenix:export
 ```
 
-**Verification:** every `export/*.json` file non-empty and parses (`jq length export/*.json`).
+**Corrections applied (do not revert to the v4.0 form):**
+
+1. **`\copy` cannot be used.** `\copy … TO file` writes PostgreSQL COPY _text
+   format_, which escapes backslashes and embedded newlines. Applied to
+   `json_agg` output that produces a file which is **not valid JSON**. The script
+   uses `psql -X -A -t -c "SELECT …"` instead, which writes the raw scalar.
+2. **`json_agg` returns SQL NULL for an empty table**, landing in the file as an
+   empty string that fails to parse. Every query is wrapped in
+   `coalesce(json_agg(row_to_json(t)), '[]'::json)`.
+3. **The orders join referenced columns that do not exist.** v4.0 selected
+   `oi.quantity` and `oi.price_cents`; `public.order_items` is
+   `(id, order_id, book_id, unit_price, license_key, created_at)`. Quantity is
+   implicit — one row per licensed copy — and the money column is `unit_price`
+   (a `DECIMAL`, in major units). Likewise `public.orders` has
+   `payment_intent_id`, **not** `stripe_payment_intent_id`, and `total_amount`,
+   **not** `amount`. Run as written, the v4.0 command fails with
+   `ERROR: column oi.quantity does not exist`.
+
+The script also exports `reading_progress` and `book_content`, which v4.0 omitted:
+`book_content` is where `epub_url` / `pdf_url` / `audio_url` live (there is no
+`books.manuscript_url` in Supabase), and WS3.4 needs it.
+
+**Verification:** every `export/*.json` file parses and reports its row count —
+the script does this itself with `jq` and exits non-zero on any failure.
 
 #### P11.2 — TRANSFORM (`scripts/transform-data.ts`)
 
 - **Task 2.1:** Parse all export JSON files; fail loudly on malformed input.
 - **Task 2.2:** Map `auth.users.id` (UUID string) → `user.id`; set `emailVerified = (email_confirmed_at != null)`; set `name` from `raw_user_meta_data`.
 - **Task 2.3:** For each user, emit one `account` doc: `{ providerId: "credential", accountId: <user.id>, userId: <user.id>, password: "!locked:<uuid>" }`.
-- **Task 2.4:** Map `profiles.auth_user_id` → `user.id`; convert `profiles.id` UUID → new ObjectId `_id`; keep a UUID→ObjectId lookup table (written to `export/_id_map.json`).
+- **Task 2.4:** Map `profiles.user_id` → `user.id`; convert `profiles.id` UUID → new ObjectId `_id`; keep a UUID→ObjectId lookup table (written to `export/_id_map.json`).
+  > **v4.0.2:** v4.0 called the source column `profiles.auth_user_id`. That is the
+  > **Mongo** field name; the Supabase column is `profiles.user_id`
+  > (`user_id UUID UNIQUE NOT NULL REFERENCES auth.users(id)`). The transform reads
+  > `user_id` and writes `auth_user_id`.
 - **Task 2.5:** Convert `authors.profile_id` and `books.author_id` via `_id_map.json` to ObjectIds; generate unique `slug` for each book (lowercase, hyphenated, numeric suffix on collision); initialize `avg_rating: 0`, `review_count: 0`.
+  > **v4.0.2:** `books.author_id` is nullable in Supabase (`ON DELETE SET NULL`), so
+  > an unmappable author is valid input, not a transform failure. Such books are
+  > imported with `author_id: null`, counted in the report, and surfaced by P11.5 as
+  > a distinct WARN rather than failing referential integrity.
+  >
+  > `avg_rating` / `review_count` are initialised to 0 and then **recomputed from
+  > the migrated reviews in the same pass**, using the same aggregation WS2c.1.2
+  > runs after a review mutation. Leaving them at 0 while importing reviews would
+  > render every book as unrated immediately after cutover.
 - **Task 2.6:** Flatten `orders_raw.json` into `orders.json` with embedded `order_items[]`; preserve `stripe_payment_intent_id`.
+  > **v4.0.2 — three details v4.0 left undefined:**
+  >
+  > 1. `orders.user_id` in Supabase is a **`profiles.id`**, but `Order.user_id` in
+  >    Mongo is the **auth user id** (see `app/api/webhook/route.ts`, which writes
+  >    `metadata.user_id`). The transform remaps through `_id_map`.
+  > 2. Legacy orders predating Stripe have `payment_intent_id IS NULL`. Since the
+  >    unique sparse index on `orders.stripe_payment_intent_id` is what enforces
+  >    webhook idempotency, those rows get a stable synthetic key
+  >    `legacy:<order_number>` and are counted in the report.
+  > 3. Repeat lines for the same book within one order collapse into a single
+  >    `order_items[]` entry with `quantity` summed.
+- **Task 2.9 _(v4.0.2, new)_ — narrow the enums.** Postgres CHECK constraints are
+  wider than the Mongo unions in `types/mongo.ts`, so unmapped values would break
+  `tsc` consumers and leak unpublished content:
+  - `books.status`: `draft|submitted|review|accepted|published|archived` → Mongo
+    `draft|published|archived`. The three in-flight editorial states collapse to
+    `draft` so nothing unpublished reaches the public catalog.
+  - `orders.status`: `pending|processing|completed|cancelled|refunded` → Mongo
+    `pending|completed|failed|refunded` (`processing`→`pending`,
+    `cancelled`→`failed`).
+  - `profiles.role`: any legacy `editor` degrades to `reader` (v4.0.1 removed the
+    role).
+    Every remap is counted in the transform report.
 - **Task 2.7:** Convert all ISO date strings to native `Date` (`$date`) objects.
 - **Task 2.8:** Emit transform report: per-collection counts in/out, orphans detected, slug collisions resolved.
 
@@ -578,23 +624,42 @@ _(Intentionally NOT imported: `session` — wiped by design; `verification` — 
 
 #### P11.5 — VERIFY (via `mongosh`)
 
-```javascript
-// Count reconciliation (must equal transform report)
-db.user.countDocuments(); // == Supabase auth.users count
-db.profiles.countDocuments(); // == Supabase profiles count
-db.books.countDocuments(); // == Supabase books count
-db.orders.countDocuments(); // == distinct legacy orders count
+> **v4.0.2:** implemented as `scripts/verify-migration.mongo.js`, which prints
+> `PASS` / `WARN` / `FAIL` per check and exits non-zero if anything fails, so it
+> can gate P11.6 in a pipeline.
 
-// Referential integrity — each must return 0
-db.profiles.countDocuments({ auth_user_id: { $nin: db.user.distinct('id') } });
-db.books.countDocuments({ author_id: { $nin: db.authors.distinct('_id') } });
-db.orders.countDocuments({ order_items: { $size: 0 } });
-
-// Legacy storage references — must return 0
-db.books.countDocuments({
-  $or: [{ cover_url: /supabase\.co\/storage/ }, { manuscript_url: /supabase\.co\/storage/ }],
-});
+```bash
+EXPECTED_COUNTS="$(jq -c '[.counts|to_entries[]|{(.key):.value.out}]|add' export/transform-report.json)" \
+  mongosh "$MONGODB_URI" --quiet --file scripts/verify-migration.mongo.js
 ```
+
+**⚠️ The v4.0 snippet below must NOT be used — it reports a false failure on
+every row.** Retained only so the defect is not reintroduced:
+
+```javascript
+// BROKEN — db.user has no `id` field at the collection level.
+db.profiles.countDocuments({ auth_user_id: { $nin: db.user.distinct('id') } });
+```
+
+The Better Auth MongoDB adapter stores the primary key as **`_id`** and only
+projects it as `id` through `customTransformOutput`. At the raw collection level
+`db.user.distinct('id')` returns `[]`, and `{$nin: []}` matches **every**
+document — so the check reports 100% of profiles as orphans. Verified against a
+real `mongod` with the imported fixture: 3 profiles in the database,
+`distinct('id')` → `[]`, documented check → 3 orphans, corrected check → 0.
+
+The shipped script therefore:
+
+1. uses `_id` for all Better Auth key comparisons;
+2. replaces `$nin: <full distinct array>` with `$lookup` anti-joins, which
+   `$nin` cannot do at production row counts;
+3. adds the credential-safety check v4.0 omitted, which North Star #4 requires —
+   **no `account` document may contain a bcrypt hash** (`/^\$2[aby]?\$/` must
+   return 0), every credential account must carry the `!locked:` sentinel, and
+   every `user` must have an `account` (a user without one can never sign in);
+4. asserts the unique indexes themselves exist, since duplicate-free data is not
+   the same as a database that will _reject_ a duplicate;
+5. treats `books.author_id: null` as a WARN, not a FAIL (see Task 2.5).
 
 #### P11.6 — RECONCILE & SIGN-OFF
 
@@ -811,24 +876,24 @@ _Decision Time Limit:_ No more than **60 minutes** between trigger and Go/No-Go 
 
 ### 9.2 Key Files & Their Ownership
 
-| File                         | Purpose                           | Workstream | Status      |
-| ---------------------------- | --------------------------------- | ---------- | ----------- |
-| `lib/auth.ts`                | Better Auth server config         | WS1        | ✅ New      |
-| `lib/auth-client.ts`         | Better Auth React client          | WS1        | ✅ New      |
-| `emails/reset.tsx`           | Branded reset email template      | WS1        | ✅ New      |
+| File                         | Purpose                           | Workstream | Status                                             |
+| ---------------------------- | --------------------------------- | ---------- | -------------------------------------------------- |
+| `lib/auth.ts`                | Better Auth server config         | WS1        | ✅ New                                             |
+| `lib/auth-client.ts`         | Better Auth React client          | WS1        | ✅ New                                             |
+| `emails/reset.tsx`           | Branded reset email template      | WS1        | ✅ New                                             |
 | `lib/mongodb.ts`             | MongoDB connection singleton      | WS2a       | ✅ New (canonical; `lib/mongo.ts` re-exports — D2) |
-| `lib/mongo-queries.ts`       | Centralized query functions       | WS2a       | ✅ New      |
-| `types/mongo.ts`             | Mongo document types              | WS2a       | ✅ New      |
-| `lib/audit.ts`               | Audit log writer                  | WS2c       | ✅ New      |
-| `lib/actions/upload.ts`      | Server actions (rewritten)        | WS3        | ✅ Migrated |
-| `scripts/migrate-storage.ts` | Supabase→Blob bulk file migration | WS3        | ✅ New      |
-| `scripts/transform-data.ts`  | Export→Mongo transform pipeline   | P11        | ✅ New      |
-| `scripts/export-delta.ts`    | Rollback divergence capture       | §8.3       | ✅ New      |
-| `lib/logger.ts`              | Structured JSON logger            | WS6        | ✅ New      |
-| `lib/ratelimit.ts`           | Upstash rate limiter              | WS6        | ✅ New      |
-| `lib/supabase/*.ts`          | Supabase client/query files       | WS4        | ❌ Delete   |
-| `types/database.ts`          | Supabase types                    | WS4        | ❌ Delete   |
-| `middleware.ts`              | Session + rate-limit middleware   | WS1/WS6    | ✅ Migrated |
+| `lib/mongo-queries.ts`       | Centralized query functions       | WS2a       | ✅ New                                             |
+| `types/mongo.ts`             | Mongo document types              | WS2a       | ✅ New                                             |
+| `lib/audit.ts`               | Audit log writer                  | WS2c       | ✅ New                                             |
+| `lib/actions/upload.ts`      | Server actions (rewritten)        | WS3        | ✅ Migrated                                        |
+| `scripts/migrate-storage.ts` | Supabase→Blob bulk file migration | WS3        | ✅ New                                             |
+| `scripts/transform-data.ts`  | Export→Mongo transform pipeline   | P11        | ✅ New                                             |
+| `scripts/export-delta.ts`    | Rollback divergence capture       | §8.3       | ✅ New                                             |
+| `lib/logger.ts`              | Structured JSON logger            | WS6        | ✅ New                                             |
+| `lib/ratelimit.ts`           | Upstash rate limiter              | WS6        | ✅ New                                             |
+| `lib/supabase/*.ts`          | Supabase client/query files       | WS4        | ❌ Delete                                          |
+| `types/database.ts`          | Supabase types                    | WS4        | ❌ Delete                                          |
+| `middleware.ts`              | Session + rate-limit middleware   | WS1/WS6    | ✅ Migrated                                        |
 
 ### 9.3 Troubleshooting Quick Reference
 
@@ -949,6 +1014,40 @@ By signing below, each stakeholder confirms they have reviewed this document and
 | 2.0     | 2026-07-18 | Project Lead | Complete rewrite — comprehensive architecture, BRD/FRD/Tech Spec unification                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 3.0     | 2026-07-18 | Project Lead | All-Encompassing Edition: granular task breakdown, 20-point QA, NFRs, rollback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 4.0     | 2026-07-19 | Project Lead | **Implementation-Locked Edition:** Fixed invalid SQL export syntax and Better Auth collection naming (`user`/`account`/`session`/`verification`); replaced incorrect password re-hash assumption with forced-password-reset flow (WS1.7, R-AUTH-07); defined missing WS5 (Tests) and WS6 (Observability & Rate Limiting) closing the PR #5/#6 gap; added legacy file migration (WS3.4), audit log (2c.2), avg_rating recompute (2c.1.2), webhook idempotency (2b.1.4); added migration dry-run gate (P11.3), reconciliation sign-off (P11.6), rollback divergence handling, full communications plan (§8.1), expanded QA to 22 points with requirement traceability, 4 new risks (R-08–R-11), master implementation checklist (§9.4); corrected typos and Cloud Run standby policy. |
+| 4.0.2   | 2026-07-25 | Agent        | **Phase 11 Executable Edition** — §5.5 reconciled against `supabase/migrations/` and a real `mongod`. See the amendment table below. Phase 11 moves from prose to six runnable scripts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+### v4.0.2 amendments (2026-07-25)
+
+Every item below was found while implementing §5.5 and would have halted the
+cutover if executed as written in v4.0. Each is verified against the schema in
+`supabase/migrations/` or against a real `mongod`.
+
+| ID   | Section    | Defect in v4.0                                                                                                                         | Resolution                                                                                                                 |
+| ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| A-1  | P11.1      | `\copy … TO file` applies COPY text escaping to `json_agg` output, producing invalid JSON                                              | Export via `psql -X -A -t -c`; `scripts/export-supabase.sh`                                                                |
+| A-2  | P11.1      | `json_agg` yields SQL NULL for an empty table, writing an unparseable file                                                             | `coalesce(json_agg(...), '[]'::json)`                                                                                      |
+| A-3  | P11.1      | Orders join selects `oi.quantity` and `oi.price_cents`, neither of which exists → `ERROR: column oi.quantity does not exist`           | Select `oi.unit_price`; quantity is implicit per row; `orders.payment_intent_id` / `total_amount` named correctly          |
+| A-4  | P11.1      | `reading_progress` and `book_content` never exported, but WS3.4 needs `book_content` for manuscript URLs                               | Both added to the export set                                                                                               |
+| A-5  | P11.2 T2.4 | Source column named `profiles.auth_user_id`; the Supabase column is `profiles.user_id` (`auth_user_id` is the Mongo field)             | Transform reads `user_id`, writes `auth_user_id`                                                                           |
+| A-6  | P11.2 T2.6 | `orders.user_id` is a `profiles.id`, but `Order.user_id` in Mongo is the auth user id — undocumented, and silently breaks entitlements | Remapped through `_id_map`; asserted by unit test                                                                          |
+| A-7  | P11.2 T2.6 | Pre-Stripe orders have a NULL payment intent, defeating the idempotency index                                                          | Synthetic `legacy:<order_number>` key, counted in the report                                                               |
+| A-8  | P11.2      | Postgres CHECK enums are wider than the Mongo unions, so `submitted`/`review`/`accepted` books would leak as non-draft                 | New Task 2.9 defines every narrowing; all remaps counted                                                                   |
+| A-9  | P11.2 T2.5 | `books.author_id` is nullable (`ON DELETE SET NULL`), so v4.0 would fail the gate on valid data                                        | Imported as `author_id: null`; P11.5 reports it as WARN                                                                    |
+| A-10 | P11.2 T2.5 | Initialising `avg_rating`/`review_count` to 0 while importing reviews renders every book unrated post-cutover                          | Recomputed in-pass with the WS2c.1.2 aggregation                                                                           |
+| A-11 | P11.5      | `db.user.distinct('id')` returns `[]` (the adapter stores `_id`), so `$nin: []` matches everything and every row reports as an orphan  | Use `_id`; proven against a real `mongod` (3 profiles → documented check 3 orphans, corrected 0)                           |
+| A-12 | P11.5      | `$nin: <full distinct array>` does not scale to production row counts                                                                  | `$lookup` anti-joins                                                                                                       |
+| A-13 | P11.5      | No check that password hashes were actually left behind, though North Star #4 depends on it                                            | Added: 0 bcrypt hashes, all credentials `!locked:`, every user has an account                                              |
+| A-14 | P11.5      | Verified data but not the indexes that _enforce_ the invariants at write time                                                          | Assert `orders_stripe_payment_intent_uq` and `books_slug_uq` exist                                                         |
+| A-15 | §11        | Four of the six agent-owned migration scripts did not exist, so Phase 11 was not executable                                            | `export-supabase.sh`, `transform-data.ts`, `verify-migration.mongo.js`, `send-forced-resets.ts`, `export-delta.ts` shipped |
+
+**Better Auth `_id` finding (informs the P11.3 gate).** `@better-auth/mongo-adapter`
+coerces id fields with `new ObjectId(value)` and falls back to the raw string when
+that throws — which it always does for a 36-character UUID. Importing `user` docs
+with `_id` set to the legacy UUID therefore round-trips correctly, and legacy UUID
+ids coexist with the 24-hex ids new signups receive. Confirmed against a real
+`mongod`: a locked legacy account rejects sign-in (including when the sentinel
+itself is supplied as the password), and `requestPasswordReset` resolves the
+imported user and writes a verification token.
 
 ---
 

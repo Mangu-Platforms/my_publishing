@@ -46,25 +46,28 @@ touching three UIs.
 
 **Remaining manual steps (3) — operator must do these:**
 
-#### H0.1-A  One-time bootstrap (do once, never again)
+#### H0.1-A One-time bootstrap (do once, never again)
+
 Set these five GitHub Secrets at
 `github.com/redinc23/my_publishing/settings/secrets/actions`:
 
-| Secret | Where to get it |
-|---|---|
-| `VERCEL_TOKEN` | vercel.com/account/tokens → Create |
-| `GH_PAT_SECRETS` | github.com/settings/tokens → Fine-grained → secrets:write on this repo |
-| `VERCEL_PROJECT_MY_PUBLISHING` | Vercel → my_publishing → Settings → General → Project ID |
-| `VERCEL_PROJECT_MANGUPROJECTZ` | Vercel → manguprojectz → Settings → General → Project ID |
-| `VERCEL_TEAM_ID` | Vercel team ID (blank if personal account) |
+| Secret                         | Where to get it                                                        |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `VERCEL_TOKEN`                 | vercel.com/account/tokens → Create                                     |
+| `GH_PAT_SECRETS`               | github.com/settings/tokens → Fine-grained → secrets:write on this repo |
+| `VERCEL_PROJECT_MY_PUBLISHING` | Vercel → my_publishing → Settings → General → Project ID               |
+| `VERCEL_PROJECT_MANGUPROJECTZ` | Vercel → manguprojectz → Settings → General → Project ID               |
+| `VERCEL_TEAM_ID`               | Vercel team ID (blank if personal account)                             |
 
-#### H0.1-B  Run the rotation workflow (pushes new key everywhere)
+#### H0.1-B Run the rotation workflow (pushes new key everywhere)
+
 1. Go to **Actions → Rotate Supabase Anon Key → Run workflow**
 2. Paste the `sb_publishable_…` key from
    [Supabase dashboard → project `tkzvikozrcynhwsqtkqp` → Settings → API](https://supabase.com/dashboard/project/tkzvikozrcynhwsqtkqp/settings/api)
 3. Click **Run workflow** — GitHub Secrets + both Vercel projects update automatically
 
-#### H0.1-C  Disable the OLD key in Supabase (kills the git-history exposure)
+#### H0.1-C Disable the OLD key in Supabase (kills the git-history exposure)
+
 1. Supabase dashboard → project `tkzvikozrcynhwsqtkqp` → Settings → API Keys
 2. Find the legacy `anon` JWT (`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrenZp…`) → **Disable**
 3. Verify: `curl -I https://tkzvikozrcynhwsqtkqp.supabase.co/rest/v1/ -H "apikey: <OLD_JWT>"` → must return `401`
@@ -113,6 +116,14 @@ The local gcloud session is expired; run `gcloud auth login`, then verify that
 `upstash-redis-rest-token`). Create any that are missing in the GCP project.
 
 ### H0.4 Apply the deploy.yml hardening manually (token scope gap)
+
+> **Update 2026-07-25:** the scope gap no longer applies to Cursor cloud agents —
+> a `.github/workflows/ci.yml` change was pushed successfully on
+> `cursor/phoenix-cutover-readiness-a030`. Workflow-file edits can be requested
+> from an agent again. Note also that `deploy.yml` and 18 other workflows were
+> **deleted** by the CI minimization in `8c8ba3f` (only `ci.yml`,
+> `merge-steward.yml` and `rotate-supabase-key.yml` remain), so the hardening
+> below applies to whichever of those files you choose to restore.
 
 The swarm's GitHub token lacks the `workflow` OAuth scope, so
 `.github/workflows/*` edits could not be pushed by the swarm. Apply this change
@@ -223,21 +234,48 @@ Click-paths reference `docs/PROJECT_PHOENIX.md` unless noted.
 
 ## Phase 8 — Vercel env / Stripe
 
-| ID   | Task                                                                                 | Status |
-| ---- | ------------------------------------------------------------------------------------ | ------ |
-| P8.x | Load all Phoenix §9.1 (+ amended SITE_URL / extras) into Vercel Production + Preview | ⬜     |
+| ID   | Task                                                                                                                            | Status |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| P8.x | Load all Phoenix §9.1 (+ amended SITE_URL / extras) into Vercel Production + Preview                                            | ⬜     |
 | P8.x | Add `AUTH_PROVIDER=supabase`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` to Vercel (do **not** flip to better-auth until Phase 11) | ⬜     |
-| P8.x | Point Stripe webhook at Vercel `/api/webhook` (keep Cloud Run standby)               | ⬜     |
+| P8.x | Point Stripe webhook at Vercel `/api/webhook` (keep Cloud Run standby)                                                          | ⬜     |
 
 ## Phase 11 — data cutover
 
-| ID    | Task                                                           | Status |
-| ----- | -------------------------------------------------------------- | ------ |
-| P11.1 | Run `scripts/export-supabase.sh` with `SUPABASE_DB_URL`        | ⬜     |
-| P11.4 | Production `mongoimport`                                       | ⬜     |
-| P11.5 | `mongosh` verification script sign-off                         | ⬜     |
-| P11.6 | Human sign-off on transform report                             | ⬜     |
-| —     | Trigger `scripts/send-forced-resets.ts` in prod (rate-limited) | ⬜     |
+> **All six agent-owned scripts now exist and are runnable** (they did not before
+> 2026-07-25 — four were missing, so Phase 11 could not be executed at all).
+> Step-by-step operator instructions, including what "good" output looks like and
+> when to abort: **`docs/PHOENIX_CUTOVER_RUNBOOK.md`**.
+>
+> Nothing in Phase 11 writes to Supabase or changes what the public site serves.
+> **Do not begin until P1.8 (restore-tested `pg_dump` + storage snapshot) is done.**
+
+| ID    | Task                                                                    | Command                                            | Status |
+| ----- | ----------------------------------------------------------------------- | -------------------------------------------------- | ------ |
+| P11.1 | Export from Supabase (needs `SUPABASE_DB_URL`)                          | `npm run phoenix:export`                           | ⬜     |
+| P11.2 | Transform (agent-verified; gate = zero unmapped FKs)                    | `npm run phoenix:transform`                        | ⬜     |
+| P11.3 | **Dry run into a staging Atlas db + preview smoke 6/6 — do not skip**   | see runbook §3                                     | ⬜     |
+| P11.4 | Production `mongoimport` + `npm run db:mongo:indexes`                   | see runbook §4                                     | ⬜     |
+| WS3.4 | Storage migration (needs `BLOB_READ_WRITE_TOKEN`), before P11.5         | `npm run phoenix:migrate-storage`                  | ⬜     |
+| P11.5 | `mongosh` verification — exits non-zero on any failed check             | `npm run phoenix:verify`                           | ⬜     |
+| P11.6 | Data Owner sign-off on the reconciliation bundle                        | see runbook §9                                     | ⬜     |
+| —     | Delta capture, both directions (rollback safety net)                    | `npm run phoenix:delta -- --since <ts> --source …` | ⬜     |
+| —     | Forced-reset batch in prod — start `--limit 25`, needs `RESEND_API_KEY` | `npm run phoenix:forced-resets -- --send`          | ⬜     |
+
+**Abort conditions (from the runbook — memorize these two):**
+
+- `npm run phoenix:verify` reports `FAIL` on **`no bcrypt hashes present`** → a
+  password hash reached Better Auth. Stop the cutover. This breaks North Star #4
+  and locks users out in a way that superficially looks like working auth.
+- `npm run db:mongo:indexes` fails on a duplicate key after import → the
+  uniqueness invariant is violated (slug or Stripe payment intent). Drop the
+  collections, fix the transform, restart. Do not "just skip the index" — the
+  unique sparse index on `orders.stripe_payment_intent_id` is the only thing
+  making the Stripe webhook idempotent.
+
+**Until the forced-reset batch runs, no legacy user can log in.** That is by
+design (hashes are never migrated), but it means step 7 of the runbook is not
+optional cleanup — it is how the userbase regains access.
 
 ## Phase 13–15 — cutover / teardown
 
