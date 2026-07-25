@@ -1,0 +1,7 @@
+Place install_mangu_bob_skills.sh in the root of the repository, then ask IBM Bob to run:
+
+bash install_mangu_bob_skills.sh .
+
+After installation, give Bob this prompt:
+
+Use Blueprint Ingestor on the MANGU CEO Finish-Line Blueprint, then Repository Cartographer on this repository, then Technical Spec Architect to produce the complete implementation-ready specification for S00 through S18. Build the mockup package after the technical spec. Do not write code until the repository baseline, contradiction register, and exact file-change manifests are complete. Then implement one approved slice at a time on dedicated branches and use Verification Governor before every pull request is considered complete.
