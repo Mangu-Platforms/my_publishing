@@ -1,0 +1,360 @@
+/**
+ * Dual-run book review page data (Phoenix WS2d.1 Slice E).
+ * Auth session still from AUTH_PROVIDER; review docs gated by DATABASE_PROVIDER.
+ */
+
+import '@/lib/server-only-guard';
+
+import { isMongoPrimary } from '@/lib/db/provider';
+
+export const REVIEWS_PAGE_SIZE = 10;
+
+export type ReviewUser = {
+  id: string;
+  username: string;
+  full_name?: string;
+};
+
+export type BookReview = {
+  id: string;
+  book_id: string;
+  user_id: string;
+  rating: number;
+  title?: string | null;
+  content: string;
+  is_spoiler: boolean;
+  is_public: boolean;
+  helpful_count: number;
+  verified_purchase?: boolean;
+  author_reply?: string | null;
+  author_reply_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  user_vote?: boolean | null;
+  user: ReviewUser;
+};
+
+export type BookReviewPage = {
+  reviews: BookReview[];
+  averageRating: number;
+  totalReviews: number;
+  ratingDistribution: Record<number, number>;
+  userReview?: BookReview;
+  isAuthenticated: boolean;
+  canReply: boolean;
+};
+
+export function emptyReviewPage(isAuthenticated = false): BookReviewPage {
+  return {
+    reviews: [],
+    averageRating: 0,
+    totalReviews: 0,
+    ratingDistribution: {},
+    isAuthenticated,
+    canReply: false,
+  };
+}
+
+function iso(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string') return value;
+  return '';
+}
+
+function mapMongoReview(
+  row: Record<string, unknown>,
+  user: ReviewUser,
+  userVote: boolean | null = null
+): BookReview {
+  return {
+    id: String(row._id),
+    book_id: String(row.book_id),
+    user_id: String(row.user_id),
+    rating: Number(row.rating ?? 0),
+    title: (row.title as string | null | undefined) ?? null,
+    content: String(row.content ?? ''),
+    is_spoiler: Boolean(row.is_spoiler ?? false),
+    is_public: row.is_public === undefined ? true : Boolean(row.is_public),
+    helpful_count: Number(row.helpful_count ?? 0),
+    verified_purchase: Boolean(row.verified_purchase),
+    author_reply: (row.author_reply as string | null | undefined) ?? null,
+    author_reply_at: row.author_reply_at ? iso(row.author_reply_at) : null,
+    created_at: iso(row.created_at),
+    updated_at: iso(row.updated_at),
+    user_vote: userVote,
+    user,
+  };
+}
+
+async function loadMongoReviewPage(
+  bookId: string,
+  bookAuthorId: string | null | undefined,
+  authUserId: string | null
+): Promise<BookReviewPage> {
+  const { getDb } = await import('@/lib/mongo');
+  const { ObjectId } = await import('mongodb');
+  const db = await getDb();
+
+  const bookMatchers: unknown[] = [bookId];
+  if (/^[a-fA-F0-9]{24}$/.test(bookId)) bookMatchers.push(new ObjectId(bookId));
+
+  const match = {
+    book_id: { $in: bookMatchers },
+    $or: [{ is_public: true }, { is_public: { $exists: false } }],
+  };
+
+  const [pageRows, allRatings] = await Promise.all([
+    db
+      .collection('reviews')
+      .find(match)
+      .sort({ helpful_count: -1, created_at: -1 })
+      .limit(REVIEWS_PAGE_SIZE)
+      .toArray(),
+    db.collection('reviews').find(match).project({ rating: 1 }).toArray(),
+  ]);
+
+  const distribution: Record<number, number> = {};
+  let sum = 0;
+  for (const row of allRatings) {
+    const rating = Number(row.rating ?? 0);
+    sum += rating;
+    distribution[rating] = (distribution[rating] || 0) + 1;
+  }
+  const totalReviews = allRatings.length;
+  const averageRating = totalReviews ? sum / totalReviews : 0;
+
+  const userIds = Array.from(new Set(pageRows.map((r) => String(r.user_id))));
+  const profiles = userIds.length
+    ? await db
+        .collection('profiles')
+        .find({ auth_user_id: { $in: userIds } })
+        .project({ auth_user_id: 1, display_name: 1 })
+        .toArray()
+    : [];
+  const profilesByUserId = new Map(
+    profiles.map((p) => {
+      const uid = String(p.auth_user_id);
+      const name = String(p.display_name || 'Reader');
+      return [uid, { id: uid, username: name, full_name: name }] as const;
+    })
+  );
+
+  // review_votes is Supabase-shaped; skip on Mongo until a collection exists.
+  const votesByReviewId = new Map<string, boolean>();
+
+  let canReply = false;
+  if (authUserId && bookAuthorId) {
+    const profile = await db.collection('profiles').findOne({ auth_user_id: authUserId });
+    if (profile) {
+      const author = await db.collection('authors').findOne({
+        $or: [
+          { _id: bookAuthorId as never },
+          ...(/^[a-fA-F0-9]{24}$/.test(bookAuthorId)
+            ? [{ _id: new ObjectId(bookAuthorId) as never }]
+            : []),
+          { profile_id: profile._id as never },
+          { profile_id: String(profile._id) },
+        ],
+      });
+      canReply = !!author && String(author._id) === String(bookAuthorId);
+    }
+  }
+
+  const reviews = pageRows.map((row) => {
+    const uid = String(row.user_id);
+    return mapMongoReview(
+      row as Record<string, unknown>,
+      profilesByUserId.get(uid) || { id: uid, username: 'Reader' },
+      votesByReviewId.get(String(row._id)) ?? null
+    );
+  });
+
+  let userReview = authUserId ? reviews.find((review) => review.user_id === authUserId) : undefined;
+  if (authUserId && !userReview) {
+    const own = await db.collection('reviews').findOne({
+      book_id: { $in: bookMatchers },
+      user_id: authUserId,
+    });
+    if (own) {
+      userReview = mapMongoReview(own as Record<string, unknown>, {
+        id: authUserId,
+        username: 'You',
+      });
+    }
+  }
+
+  return {
+    reviews,
+    averageRating,
+    totalReviews,
+    ratingDistribution: distribution,
+    userReview,
+    isAuthenticated: !!authUserId,
+    canReply,
+  };
+}
+
+async function loadSupabaseReviewPage(
+  bookId: string,
+  bookAuthorId: string | null | undefined,
+  authUserId: string | null
+): Promise<BookReviewPage> {
+  const { createClient: createAdminClient } = await import('@/lib/supabase/admin');
+  const admin = createAdminClient();
+  const emptyStats = { sum: 0, total: 0, distribution: {} as Record<number, number> };
+
+  const { data: reviews, error: reviewsError } = await admin
+    .from('reviews')
+    .select(
+      `
+        id,
+        book_id,
+        user_id,
+        rating,
+        title,
+        content,
+        is_spoiler,
+        is_public,
+        helpful_count,
+        verified_purchase,
+        author_reply,
+        author_reply_at,
+        created_at,
+        updated_at
+      `
+    )
+    .eq('book_id', bookId)
+    .eq('is_public', true)
+    .order('helpful_count', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(0, REVIEWS_PAGE_SIZE - 1);
+
+  const { data: allRatings, error: statsError } = await admin
+    .from('reviews')
+    .select('rating')
+    .eq('book_id', bookId)
+    .eq('is_public', true);
+
+  if (reviewsError || statsError) {
+    console.warn('[reviews] supabase query failed; rendering without reviews', {
+      reviewsError,
+      statsError,
+    });
+    return emptyReviewPage(!!authUserId);
+  }
+
+  const stats = (allRatings || []).reduce((acc, row) => {
+    acc.sum += row.rating;
+    acc.total += 1;
+    acc.distribution[row.rating] = (acc.distribution[row.rating] || 0) + 1;
+    return acc;
+  }, emptyStats);
+
+  const userIds = Array.from(new Set((reviews || []).map((review) => review.user_id)));
+  const { data: profiles } = userIds.length
+    ? await admin.from('profiles').select('user_id, full_name').in('user_id', userIds)
+    : { data: [] };
+
+  const profilesByUserId = new Map(
+    (profiles || []).map((profile) => [
+      profile.user_id,
+      {
+        id: profile.user_id,
+        username: profile.full_name || 'Reader',
+        full_name: profile.full_name || undefined,
+      },
+    ])
+  );
+
+  const votesByReviewId = new Map<string, boolean>();
+  if (authUserId && (reviews || []).length) {
+    const { data: votes } = await admin
+      .from('review_votes')
+      .select('review_id, is_helpful')
+      .eq('user_id', authUserId)
+      .in(
+        'review_id',
+        (reviews || []).map((review) => review.id)
+      );
+    for (const vote of votes || []) {
+      votesByReviewId.set(vote.review_id, vote.is_helpful);
+    }
+  }
+
+  let canReply = false;
+  if (authUserId && bookAuthorId) {
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('user_id', authUserId)
+      .maybeSingle();
+    if (profile) {
+      const { data: authorRows } = await admin
+        .from('authors')
+        .select('id')
+        .eq('profile_id', profile.id);
+      canReply = (authorRows || []).some((row) => row.id === bookAuthorId);
+    }
+  }
+
+  const normalizedReviews = (reviews || []).map((review) => ({
+    ...review,
+    user_vote: votesByReviewId.get(review.id) ?? null,
+    user: profilesByUserId.get(review.user_id) || {
+      id: review.user_id,
+      username: 'Reader',
+    },
+  })) as BookReview[];
+
+  let userReview = normalizedReviews.find((review) => review.user_id === authUserId);
+  if (authUserId && !userReview) {
+    const { data: ownReview } = await admin
+      .from('reviews')
+      .select(
+        'id, book_id, user_id, rating, title, content, is_spoiler, is_public, helpful_count, verified_purchase, author_reply, author_reply_at, created_at, updated_at'
+      )
+      .eq('book_id', bookId)
+      .eq('user_id', authUserId)
+      .maybeSingle();
+    if (ownReview) {
+      userReview = {
+        ...ownReview,
+        user_vote: null,
+        user: profilesByUserId.get(ownReview.user_id) || {
+          id: ownReview.user_id,
+          username: 'You',
+        },
+      };
+    }
+  }
+
+  return {
+    reviews: normalizedReviews,
+    averageRating: stats.total ? stats.sum / stats.total : 0,
+    totalReviews: stats.total,
+    ratingDistribution: stats.distribution,
+    userReview,
+    isAuthenticated: !!authUserId,
+    canReply,
+  };
+}
+
+/**
+ * First page of public reviews + stats for the book PDP.
+ * Degrades to empty on failure (never 500 the page).
+ */
+export async function getBookReviewPage(
+  bookId: string,
+  opts: { bookAuthorId?: string | null; authUserId?: string | null } = {}
+): Promise<BookReviewPage> {
+  const authUserId = opts.authUserId ?? null;
+  try {
+    if (isMongoPrimary()) {
+      return await loadMongoReviewPage(bookId, opts.bookAuthorId, authUserId);
+    }
+    return await loadSupabaseReviewPage(bookId, opts.bookAuthorId, authUserId);
+  } catch (error) {
+    console.error('[reviews] getBookReviewPage failed; rendering without reviews', error);
+    return emptyReviewPage(!!authUserId);
+  }
+}
