@@ -37,41 +37,25 @@ function record(status, label, detail) {
   print(`  [${tag}] ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
-/** Asserts an anti-join returns no rows: every `localField` resolves. */
-function checkReferences(label, from, localField, to, extraMatch) {
-  const pipeline = [];
-  const match = Object.assign({}, extraMatch || {});
-  match[localField] = { $ne: null };
-  pipeline.push({ $match: match });
-  pipeline.push({
-    $lookup: { from: to, localField: localField, foreignField: '_id', as: '_resolved' },
-  });
-  pipeline.push({ $match: { _resolved: { $size: 0 } } });
-  pipeline.push({ $count: 'orphans' });
+/**
+ * Anti-join: asserts every non-null `from.localField` resolves to a `to._id`.
+ * NULL is excluded because a nullable FK is valid input (see books.author_id).
+ */
+function checkReferences(from, localField, to) {
+  const result = target
+    .getCollection(from)
+    .aggregate([
+      { $match: { [localField]: { $ne: null } } },
+      { $lookup: { from: to, localField: localField, foreignField: '_id', as: '_resolved' } },
+      { $match: { _resolved: { $size: 0 } } },
+      { $count: 'orphans' },
+    ])
+    .toArray();
 
-  const result = target.getCollection(from).aggregate(pipeline).toArray();
   const orphans = result.length ? result[0].orphans : 0;
   record(
     orphans === 0 ? 'PASS' : 'FAIL',
     `${from}.${localField} → ${to}`,
-    orphans === 0 ? 'all resolve' : `${orphans} unresolved`
-  );
-  return orphans;
-}
-
-/** Same, but the foreign key points at a string `_id` (Better Auth `user`). */
-function checkStringReferences(label, from, localField) {
-  const pipeline = [
-    { $match: { [localField]: { $ne: null } } },
-    { $lookup: { from: 'user', localField: localField, foreignField: '_id', as: '_resolved' } },
-    { $match: { _resolved: { $size: 0 } } },
-    { $count: 'orphans' },
-  ];
-  const result = target.getCollection(from).aggregate(pipeline).toArray();
-  const orphans = result.length ? result[0].orphans : 0;
-  record(
-    orphans === 0 ? 'PASS' : 'FAIL',
-    `${from}.${localField} → user`,
     orphans === 0 ? 'all resolve' : `${orphans} unresolved`
   );
   return orphans;
@@ -135,16 +119,18 @@ if (!expected) {
 print('');
 print('3. Referential integrity (each must resolve completely)');
 
-checkStringReferences('profiles auth user', 'profiles', 'auth_user_id');
-checkStringReferences('orders owner', 'orders', 'user_id');
-checkStringReferences('reviews author', 'reviews', 'user_id');
-checkStringReferences('reading progress owner', 'reading_progress', 'user_id');
-checkStringReferences('accounts owner', 'account', 'userId');
+// `user._id` is a legacy UUID string rather than an ObjectId, but $lookup
+// compares values, not types, so the same anti-join works for both.
+checkReferences('profiles', 'auth_user_id', 'user');
+checkReferences('orders', 'user_id', 'user');
+checkReferences('reviews', 'user_id', 'user');
+checkReferences('reading_progress', 'user_id', 'user');
+checkReferences('account', 'userId', 'user');
 
-checkReferences('authors profile', 'authors', 'profile_id', 'profiles');
-checkReferences('books author', 'books', 'author_id', 'authors');
-checkReferences('reviews book', 'reviews', 'book_id', 'books');
-checkReferences('reading progress book', 'reading_progress', 'book_id', 'books');
+checkReferences('authors', 'profile_id', 'profiles');
+checkReferences('books', 'author_id', 'authors');
+checkReferences('reviews', 'book_id', 'books');
+checkReferences('reading_progress', 'book_id', 'books');
 
 // Books whose legacy author_id was NULL are legitimate (Supabase nulls the FK on
 // author delete), but they are invisible in the author portal, so surface them.
