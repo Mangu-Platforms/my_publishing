@@ -169,4 +169,22 @@ describe('getAdminDashboardStats dual-run', () => {
     });
     expect(mockFrom).not.toHaveBeenCalled();
   });
+
+  it('returns [] when Mongo engagement_events exists but is empty', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    mockCountDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    mockListCollectionsToArray.mockResolvedValue([{ name: 'engagement_events' }]);
+    mockFindToArray.mockResolvedValue([]);
+
+    const { getAdminDashboardStats } = await import('@/lib/data/admin-dashboard');
+    await expect(getAdminDashboardStats()).resolves.toEqual({
+      ok: true,
+      data: {
+        totalUsers: 1,
+        totalBooks: 1,
+        totalOrders: 1,
+        recentActivity: [],
+      },
+    });
+  });
 });
