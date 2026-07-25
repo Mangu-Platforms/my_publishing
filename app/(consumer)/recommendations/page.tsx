@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createPublicCatalogClient, PUBLIC_BOOK_SELECT } from '@/lib/supabase/public-queries';
+import { listTrendingBooks } from '@/lib/data/books';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { BookCard } from '@/components/cards/BookCard';
@@ -16,18 +16,12 @@ export const metadata: Metadata = {
  * Server-rendered editorial baseline: always available, even with JS disabled
  * or when the Resonance API is unreachable. The client rails above layer
  * personalization on top and suppress themselves on any failure.
+ *
+ * Dual-run via listTrendingBooks (Mongo falls back to review_count/avg_rating).
  */
 async function getPopularBooks(): Promise<BookWithAuthor[]> {
-  const supabase = createPublicCatalogClient();
-  const { data } = await supabase
-    .from('books')
-    .select(PUBLIC_BOOK_SELECT)
-    .eq('status', 'published')
-    .eq('visibility', 'public')
-    .order('total_reads', { ascending: false })
-    .limit(12);
-
-  return (data as BookWithAuthor[]) || [];
+  const books = await listTrendingBooks(12);
+  return books as unknown as BookWithAuthor[];
 }
 
 export default async function RecommendationsPage() {

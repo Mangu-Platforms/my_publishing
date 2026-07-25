@@ -2,6 +2,27 @@
 
 import { hasCompletedOrderForBook, getCompletedOrderBookIds } from '@/lib/reading/entitlement';
 
+const mockIsMongoPrimary = jest.fn(() => false);
+jest.mock('@/lib/db/provider', () => ({
+  isMongoPrimary: () => mockIsMongoPrimary(),
+  getDatabaseProvider: () => (mockIsMongoPrimary() ? 'mongodb' : 'supabase'),
+}));
+
+const mockFindOne = jest.fn();
+const mockFindToArray = jest.fn();
+jest.mock('@/lib/mongo', () => ({
+  getDb: jest.fn(async () => ({
+    collection: jest.fn(() => ({
+      findOne: (...args: unknown[]) => mockFindOne(...args),
+      find: jest.fn(() => ({
+        project: jest.fn(() => ({
+          toArray: () => mockFindToArray(),
+        })),
+      })),
+    })),
+  })),
+}));
+
 function makeOrderChain(result: { data: unknown; error: unknown }) {
   const chain = {
     select: jest.fn().mockReturnThis(),
@@ -23,6 +44,12 @@ function makeListChain(result: { data: unknown; error: unknown }) {
 }
 
 describe('hasCompletedOrderForBook', () => {
+  beforeEach(() => {
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockFindOne.mockReset();
+    mockFindToArray.mockReset();
+  });
+
   it('returns true when a completed order contains the book', async () => {
     const chain = makeOrderChain({ data: { id: 'order-1' }, error: null });
     const admin = { from: jest.fn(() => chain) };
@@ -61,7 +88,38 @@ describe('hasCompletedOrderForBook', () => {
   });
 });
 
+describe('hasCompletedOrderForBook (mongodb)', () => {
+  beforeEach(() => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    mockFindOne.mockReset();
+  });
+
+  it('queries orders by auth user id and embedded order_items', async () => {
+    mockFindOne.mockResolvedValue({ _id: 'o1' });
+    await expect(
+      hasCompletedOrderForBook(null as never, 'profile-1', 'book-1', 'auth-1')
+    ).resolves.toBe(true);
+    expect(mockFindOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'auth-1',
+        status: 'completed',
+      })
+    );
+  });
+
+  it('returns false when no mongo order matches', async () => {
+    mockFindOne.mockResolvedValue(null);
+    await expect(
+      hasCompletedOrderForBook(null as never, 'profile-1', 'book-1', 'auth-1')
+    ).resolves.toBe(false);
+  });
+});
+
 describe('getCompletedOrderBookIds', () => {
+  beforeEach(() => {
+    mockIsMongoPrimary.mockReturnValue(false);
+  });
+
   it('filters orders by profile id and status, returning deduped book ids', async () => {
     const chain = makeListChain({
       data: [

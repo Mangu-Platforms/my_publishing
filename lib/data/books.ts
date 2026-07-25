@@ -431,6 +431,7 @@ export async function fetchBookForApi(idOrSlug: {
         ? await getBookBySlug(idOrSlug.slug)
         : null;
     if (!book) return null;
+    const penName = book.author?.pen_name ?? null;
     return {
       id: String(book._id),
       title: book.title,
@@ -442,14 +443,43 @@ export async function fetchBookForApi(idOrSlug: {
       status: book.status,
       visibility: book.visibility,
       cover_url: book.cover_url ?? null,
-      author_id: String(book.author_id),
+      manuscript_url: book.manuscript_url ?? null,
+      author_id: book.author_id != null ? String(book.author_id) : undefined,
       avg_rating: book.avg_rating,
       review_count: book.review_count,
+      average_rating: book.avg_rating,
+      content_type: book.content_type ?? 'book',
+      published_at:
+        book.published_at instanceof Date
+          ? book.published_at.toISOString()
+          : (book.published_at ?? null),
+      created_at:
+        book.created_at instanceof Date
+          ? book.created_at.toISOString()
+          : String(book.created_at ?? ''),
+      updated_at:
+        book.updated_at instanceof Date
+          ? book.updated_at.toISOString()
+          : String(book.updated_at ?? ''),
+      // Mongo Book has no trailer/audio columns yet — leave undefined for UI guards.
+      trailer_vimeo_id: null,
+      audio_url: null,
+      author: penName
+        ? {
+            id: book.author?._id ? String(book.author._id) : undefined,
+            pen_name: penName,
+            full_name: penName,
+            profile: { full_name: penName },
+          }
+        : null,
     };
   }
 
-  const supabase = await createClient();
-  let query = supabase.from('books').select('*');
+  // Public catalog client joins author under RLS-safe columns (PDP needs pen_name).
+  const { createPublicCatalogClient, PUBLIC_BOOK_SELECT } =
+    await import('@/lib/supabase/public-queries');
+  const supabase = createPublicCatalogClient();
+  let query = supabase.from('books').select(PUBLIC_BOOK_SELECT);
   if (idOrSlug.id) query = query.eq('id', idOrSlug.id);
   else if (idOrSlug.slug) query = query.eq('slug', idOrSlug.slug);
   else return null;

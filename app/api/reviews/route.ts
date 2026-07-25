@@ -254,7 +254,12 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user.id)
         .maybeSingle();
       if (profile) {
-        verifiedPurchase = await hasCompletedOrderForBook(admin, profile.id, input.book_id);
+        verifiedPurchase = await hasCompletedOrderForBook(
+          admin,
+          profile.id,
+          input.book_id,
+          user.id
+        );
       }
     } catch (verifyErr) {
       console.warn('[api/reviews] verified-purchase lookup failed:', verifyErr);

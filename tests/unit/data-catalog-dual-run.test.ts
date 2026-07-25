@@ -1,7 +1,24 @@
 /**
+ * @jest-environment node
+ *
  * Phoenix WS2d.1 — dual-run catalog helpers route on DATABASE_PROVIDER.
  */
 import { slugifyGenre } from '@/lib/utils/genre';
+
+jest.mock('mongodb', () => ({
+  ObjectId: class ObjectId {
+    id: string;
+    constructor(id: string = '000000000000000000000000') {
+      this.id = id;
+    }
+    toString() {
+      return this.id;
+    }
+    static isValid(id: string) {
+      return /^[a-fA-F0-9]{24}$/.test(id);
+    }
+  },
+}));
 
 const mockIsMongoPrimary = jest.fn(() => false);
 
@@ -275,6 +292,69 @@ describe('listFeaturedAuthors dual-run', () => {
     const authors = await listFeaturedAuthors(4);
     expect(authors).toHaveLength(1);
     expect(authors[0].pen_name).toBe('Ada');
+  });
+});
+
+describe('getLibraryForAuthUser dual-run', () => {
+  afterEach(() => {
+    mockIsMongoPrimary.mockReset();
+    mockIsMongoPrimary.mockReturnValue(false);
+    jest.resetModules();
+  });
+
+  it('loads completed mongo orders with embedded items', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    const orders = [
+      {
+        _id: 'o1',
+        created_at: new Date('2026-01-01'),
+        order_items: [{ book_id: 'b1', unit_amount: 9.99, title: 'T' }],
+      },
+    ];
+    const books = [
+      {
+        _id: 'b1',
+        title: 'T',
+        slug: 't',
+        author_id: 'a1',
+        status: 'published',
+        visibility: 'public',
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    ];
+    const authors = [{ _id: 'a1', pen_name: 'Ada' }];
+    const progress: unknown[] = [];
+
+    mockGetDb.mockResolvedValueOnce({
+      collection: jest.fn((name: string) => {
+        if (name === 'orders') {
+          return {
+            find: jest.fn(() => ({
+              sort: jest.fn(() => ({
+                toArray: jest.fn(async () => orders),
+              })),
+            })),
+          };
+        }
+        if (name === 'books') {
+          return { find: jest.fn(() => ({ toArray: jest.fn(async () => books) })) };
+        }
+        if (name === 'authors') {
+          return { find: jest.fn(() => ({ toArray: jest.fn(async () => authors) })) };
+        }
+        return {
+          find: jest.fn(() => ({
+            project: jest.fn(() => ({ toArray: jest.fn(async () => progress) })),
+          })),
+        };
+      }),
+    });
+
+    const { getLibraryForAuthUser } = await import('@/lib/data/library');
+    const data = await getLibraryForAuthUser('auth-1');
+    expect(data.orders).toHaveLength(1);
+    expect(data.orders[0].items[0].book?.title).toBe('T');
   });
 });
 
