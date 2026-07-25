@@ -1,73 +1,36 @@
 /* eslint-disable */
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@/lib/supabase/admin';
+import { getRequestUser } from '@/lib/api/request-user';
+import { listMyReviews } from '@/lib/data/reviews';
 import { ReviewCard } from '@/components/books/ReviewCard';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MessageSquare, Star, TrendingUp, Filter, PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { MessageSquare, Star, TrendingUp, Filter, PlusCircle } from 'lucide-react';
 import { ReviewActions } from '@/components/books/ReviewActions';
 
 export default async function MyReviewsPage() {
-  const supabase = await createClient();
-
-  // Check auth
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Session via AUTH_PROVIDER; review rows via DATABASE_PROVIDER (default supabase).
+  const user = await getRequestUser();
   if (!user) {
     redirect('/login');
   }
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('full_name')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  const { reviews, profile } = await listMyReviews(user.id);
 
-  // Get user's reviews with the admin client because reviews has RLS enabled and no SELECT policy.
-  const { data: reviews } = await admin
-    .from('reviews')
-    .select(
-      `
-      id,
-      book_id,
-      user_id,
-      rating,
-      title,
-      content,
-      is_spoiler,
-      is_public,
-      helpful_count,
-      created_at,
-      updated_at,
-      book:books (
-        id,
-        slug,
-        title,
-        cover_url
-      )
-    `
-    )
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+  const publishedReviews = reviews.filter((r) => r.is_public);
+  const draftReviews = reviews.filter((r) => !r.is_public);
 
-  const publishedReviews = reviews?.filter((r) => r.is_public) || [];
-  const draftReviews = reviews?.filter((r) => !r.is_public) || [];
-
-  // Get review stats
-  const totalReviews = reviews?.length || 0;
-  const averageRating = reviews?.length
+  const totalReviews = reviews.length;
+  const averageRating = reviews.length
     ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
     : 0;
-  const helpfulReviews = reviews?.filter((r) => r.helpful_count > 5).length || 0;
+  const helpfulReviews = reviews.filter((r) => r.helpful_count > 5).length;
   const reviewUser = {
     id: user.id,
-    username: profile?.full_name || user.user_metadata?.username || 'Reader',
-    full_name: profile?.full_name || undefined,
-    avatar_url: user.user_metadata?.avatar_url,
+    username: profile.full_name || 'Reader',
+    full_name: profile.full_name || undefined,
+    avatar_url: profile.avatar_url || undefined,
   };
 
   return (
@@ -136,7 +99,7 @@ export default async function MyReviewsPage() {
             {publishedReviews.length > 0 ? (
               <div className="space-y-6">
                 {publishedReviews.map((review) => {
-                  const book = Array.isArray(review.book) ? review.book[0] : review.book;
+                  const book = review.book;
                   return (
                     <div key={review.id} className="group relative">
                       <ReviewCard
@@ -147,7 +110,7 @@ export default async function MyReviewsPage() {
                             ? {
                                 id: book.slug || book.id,
                                 title: book.title,
-                                cover_url: book.cover_url,
+                                cover_url: book.cover_url ?? undefined,
                               }
                             : undefined
                         }
@@ -193,9 +156,7 @@ export default async function MyReviewsPage() {
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <div>
-                        <h3 className="font-semibold">
-                          {(Array.isArray(review.book) ? review.book[0] : review.book)?.title}
-                        </h3>
+                        <h3 className="font-semibold">{review.book?.title}</h3>
                         <p className="text-sm text-gray-600">
                           Last edited: {new Date(review.updated_at).toLocaleDateString()}
                         </p>

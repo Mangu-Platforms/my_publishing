@@ -1,90 +1,17 @@
 import type { Metadata } from 'next';
 import { Headphones } from 'lucide-react';
-import { createPublicCatalogClient, PUBLIC_BOOK_SELECT } from '@/lib/supabase/public-queries';
+import { listAudiobooks } from '@/lib/data/books';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { AudioCatalogCard } from '@/components/audio/AudioCatalogCard';
-import { parseChapters } from '@/components/audio/parse-chapters';
-import type { BookWithAuthor } from '@/types';
 
 export const metadata: Metadata = {
   title: 'Audiobooks',
   description: 'Listen to audiobooks and audio editions from MANGU Publishers authors.',
 };
 
-interface AudiobookEntry {
-  id: string;
-  title: string;
-  author: string;
-  coverUrl?: string;
-  audioUrl: string;
-  narrator?: string;
-  durationSec?: number;
-}
-
-/**
- * book_content has no enforced narrator/duration columns today — read them
- * defensively so the rail lights up automatically if/when they exist
- * (content.narrator, content.audio_duration, or time-coded toc chapters).
- */
-function toEntry(book: BookWithAuthor): AudiobookEntry | null {
-  const contentRows = (book as unknown as { content?: unknown }).content;
-  const rows = Array.isArray(contentRows) ? contentRows : contentRows ? [contentRows] : [];
-  const row = rows.find(
-    (r): r is Record<string, unknown> =>
-      !!r && typeof r === 'object' && typeof (r as Record<string, unknown>).audio_url === 'string'
-  );
-  if (!row) return null;
-
-  const narrator =
-    (typeof row.narrator === 'string' && row.narrator) ||
-    (typeof (book as unknown as Record<string, unknown>).narrator === 'string'
-      ? ((book as unknown as Record<string, unknown>).narrator as string)
-      : undefined);
-
-  let durationSec: number | undefined;
-  for (const key of ['audio_duration', 'duration_seconds', 'duration']) {
-    const value = row[key];
-    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-      durationSec = value;
-      break;
-    }
-  }
-  if (durationSec === undefined) {
-    const chapters = parseChapters(row.toc);
-    const last = chapters[chapters.length - 1];
-    if (last?.end) durationSec = last.end;
-  }
-
-  const author = book.author?.profile?.full_name || book.author?.pen_name || 'Unknown Author';
-
-  return {
-    id: book.id,
-    title: book.title,
-    author,
-    coverUrl: book.cover_url,
-    audioUrl: row.audio_url as string,
-    narrator: narrator || undefined,
-    durationSec,
-  };
-}
-
-async function getAudiobooks(): Promise<AudiobookEntry[]> {
-  const supabase = createPublicCatalogClient();
-  const { data } = await supabase
-    .from('books')
-    .select(`${PUBLIC_BOOK_SELECT}, content:book_content!inner(*)`)
-    .eq('status', 'published')
-    .eq('visibility', 'public')
-    .not('content.audio_url', 'is', null);
-
-  return ((data as BookWithAuthor[]) || [])
-    .map(toEntry)
-    .filter((entry): entry is AudiobookEntry => entry !== null);
-}
-
 export default async function AudioPage() {
-  const books = await getAudiobooks();
+  const books = await listAudiobooks();
 
   return (
     <Section>

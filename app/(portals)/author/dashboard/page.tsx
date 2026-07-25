@@ -1,58 +1,25 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { getAuthorForUser } from '@/lib/supabase/portal-queries';
+import { getRequestUser } from '@/lib/api/request-user';
+import { listAuthorDashboardData } from '@/lib/data/author-portal';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import type { Book, Manuscript } from '@/types';
 
 async function getAuthorData() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Session/role via AUTH_PROVIDER; catalog/portal rows via DATABASE_PROVIDER.
+  const user = await getRequestUser();
 
   if (!user) {
     redirect('/login');
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .single();
-
-  if (profile?.role !== 'author' && profile?.role !== 'admin') {
+  if (user.role !== 'author' && user.role !== 'admin') {
     redirect('/');
   }
 
-  // authors has no RLS SELECT policy, so resolve the author row server-side.
-  const author = await getAuthorForUser(user.id);
-
-  if (!author) {
-    return { author: null, books: [], manuscripts: [], earnings: 0 };
-  }
-
-  // PERF-PHASE2-3 — Parallelize independent queries
-  const [{ data: books }, { data: manuscripts }] = await Promise.all([
-    supabase.from('books').select('*').eq('author_id', author.id),
-    supabase
-      .from('manuscripts')
-      .select('*')
-      .eq('author_id', author.id)
-      .order('created_at', { ascending: false }),
-  ]);
-
-  const earnings = 0;
-
-  return {
-    author,
-    books: (books as Book[]) || [],
-    manuscripts: (manuscripts as Manuscript[]) || [],
-    earnings,
-  };
+  return listAuthorDashboardData(user.id);
 }
 
 export default async function AuthorDashboardPage() {

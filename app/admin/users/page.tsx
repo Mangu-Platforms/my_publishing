@@ -1,19 +1,13 @@
 /* eslint-disable */
-import { createClient } from '@/lib/supabase/admin';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { Button } from '@/components/ui/button';
 import { updateUserRoleAction } from '../actions';
 import { AdminQueryError } from '../_lib/query-error';
+import { listAdminUsers } from '@/lib/data/admin-users';
 
 export default async function AdminUsersPage() {
-  const supabase = createClient();
-
-  const { data: users, error } = await supabase
-    .from('profiles')
-    .select('id, email, full_name, role, subscription_tier, created_at')
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const { users, error } = await listAdminUsers({ limit: 50 });
 
   if (error) {
     console.error('[admin/users] query failed:', error);
@@ -46,7 +40,7 @@ export default async function AdminUsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user: any) => (
+                  {users.map((user) => (
                     <tr key={user.id} className="border-t border-border">
                       <td className="px-4 py-3">{user.email}</td>
                       <td className="px-4 py-3">{user.full_name || 'N/A'}</td>

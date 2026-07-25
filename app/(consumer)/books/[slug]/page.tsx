@@ -12,7 +12,7 @@ import { FollowAuthorButton } from '@/components/reader/FollowAuthorButton';
 import { VimeoPlayer } from '@/components/players/VimeoPlayer';
 import { AudioPlayer } from '@/components/players/AudioPlayer';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@/lib/supabase/admin';
+import { getBookReviewPage } from '@/lib/data/reviews';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -28,215 +28,16 @@ async function getSimilarBooks(genre: string | undefined, excludeId: string) {
   return books.filter((b) => b.id !== excludeId).slice(0, 6);
 }
 
-const REVIEWS_PAGE_SIZE = 10;
-
-interface ReviewUser {
-  id: string;
-  username: string;
-  full_name?: string;
-}
-
-interface BookReview {
-  id: string;
-  book_id: string;
-  user_id: string;
-  rating: number;
-  title?: string | null;
-  content: string;
-  is_spoiler: boolean;
-  is_public: boolean;
-  helpful_count: number;
-  verified_purchase?: boolean;
-  author_reply?: string | null;
-  author_reply_at?: string | null;
-  created_at: string;
-  updated_at: string;
-  user_vote?: boolean | null;
-  user: ReviewUser;
-}
-
-interface ReviewDataResult {
-  reviews: BookReview[];
-  averageRating: number;
-  totalReviews: number;
-  ratingDistribution: Record<number, number>;
-  userReview?: BookReview;
-  isAuthenticated: boolean;
-  canReply: boolean;
-}
-
-function emptyReviewData(isAuthenticated = false): ReviewDataResult {
-  return {
-    reviews: [],
-    averageRating: 0,
-    totalReviews: 0,
-    ratingDistribution: {},
-    isAuthenticated,
-    canReply: false,
-  };
-}
-
-async function getReviewData(
-  bookId: string,
-  bookAuthorId?: string | null
-): Promise<ReviewDataResult> {
-  const emptyStats = { sum: 0, total: 0, distribution: {} as Record<number, number> };
-
-  try {
-    const supabase = await createClient();
-    const admin = createAdminClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    // First page of reviews (sorted "most helpful"; further pages via /api/reviews)
-    const { data: reviews, error: reviewsError } = await admin
-      .from('reviews')
-      .select(
-        `
-        id,
-        book_id,
-        user_id,
-        rating,
-        title,
-        content,
-        is_spoiler,
-        is_public,
-        helpful_count,
-        verified_purchase,
-        author_reply,
-        author_reply_at,
-        created_at,
-        updated_at
-      `
-      )
-      .eq('book_id', bookId)
-      .eq('is_public', true)
-      .order('helpful_count', { ascending: false })
-      .order('created_at', { ascending: false })
-      .range(0, REVIEWS_PAGE_SIZE - 1);
-
-    // Aggregate stats over ALL public reviews (single cheap column fetch)
-    const { data: allRatings, error: statsError } = await admin
-      .from('reviews')
-      .select('rating')
-      .eq('book_id', bookId)
-      .eq('is_public', true);
-
-    if (reviewsError || statsError) {
-      // Table/columns missing (migration not applied yet) → degrade, never 500 the page
-      console.warn('[book-page] reviews query failed; rendering without reviews', {
-        reviewsError,
-        statsError,
-      });
-      return emptyReviewData(!!user);
-    }
-
-    const stats = (allRatings || []).reduce((acc, row) => {
-      acc.sum += row.rating;
-      acc.total += 1;
-      acc.distribution[row.rating] = (acc.distribution[row.rating] || 0) + 1;
-      return acc;
-    }, emptyStats);
-
-    // Reviewer display profiles
-    const userIds = Array.from(new Set((reviews || []).map((review) => review.user_id)));
-    const { data: profiles } = userIds.length
-      ? await admin.from('profiles').select('user_id, full_name').in('user_id', userIds)
-      : { data: [] };
-
-    const profilesByUserId = new Map(
-      (profiles || []).map((profile) => [
-        profile.user_id,
-        {
-          id: profile.user_id,
-          username: profile.full_name || 'Reader',
-          full_name: profile.full_name || undefined,
-        },
-      ])
-    );
-
-    // Current user's votes on this page of reviews
-    const votesByReviewId = new Map<string, boolean>();
-    if (user && (reviews || []).length) {
-      const { data: votes } = await admin
-        .from('review_votes')
-        .select('review_id, is_helpful')
-        .eq('user_id', user.id)
-        .in(
-          'review_id',
-          (reviews || []).map((review) => review.id)
-        );
-      for (const vote of votes || []) {
-        votesByReviewId.set(vote.review_id, vote.is_helpful);
-      }
-    }
-
-    // Author-reply permission: user → profile → authors → book.author_id
-    let canReply = false;
-    if (user && bookAuthorId) {
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (profile) {
-        const { data: authorRows } = await admin
-          .from('authors')
-          .select('id')
-          .eq('profile_id', profile.id);
-        canReply = (authorRows || []).some((row) => row.id === bookAuthorId);
-      }
-    }
-
-    const normalizedReviews = (reviews || []).map((review) => ({
-      ...review,
-      user_vote: votesByReviewId.get(review.id) ?? null,
-      user: profilesByUserId.get(review.user_id) || {
-        id: review.user_id,
-        username: 'Reader',
-      },
-    }));
-
-    const totalReviews = stats.total;
-    const averageRating = totalReviews ? stats.sum / totalReviews : 0;
-
-    // The signed-in user's own review may live outside the first page
-    let userReview = normalizedReviews.find((review) => review.user_id === user?.id);
-    if (user && !userReview) {
-      const { data: ownReview } = await admin
-        .from('reviews')
-        .select(
-          'id, book_id, user_id, rating, title, content, is_spoiler, is_public, helpful_count, verified_purchase, author_reply, author_reply_at, created_at, updated_at'
-        )
-        .eq('book_id', bookId)
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (ownReview) {
-        userReview = {
-          ...ownReview,
-          user_vote: null,
-          user: profilesByUserId.get(ownReview.user_id) || {
-            id: ownReview.user_id,
-            username: 'You',
-          },
-        };
-      }
-    }
-
-    return {
-      reviews: normalizedReviews,
-      averageRating,
-      totalReviews,
-      ratingDistribution: stats.distribution,
-      userReview,
-      isAuthenticated: !!user,
-      canReply,
-    };
-  } catch (error) {
-    console.error('[book-page] getReviewData failed; rendering without reviews', error);
-    return emptyReviewData(false);
-  }
+async function getReviewData(bookId: string, bookAuthorId?: string | null) {
+  // Auth stays on AUTH_PROVIDER; review docs go through DATABASE_PROVIDER.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return getBookReviewPage(bookId, {
+    bookAuthorId,
+    authUserId: user?.id ?? null,
+  });
 }
 
 export async function generateMetadata({
@@ -254,7 +55,7 @@ export async function generateMetadata({
 
   const description =
     book.description ||
-    `Read ${book.title} by ${(book.author as Record<string, unknown> | undefined)?.['pen_name'] as string ?? 'Unknown Author'}`;
+    `Read ${book.title} by ${((book.author as Record<string, unknown> | undefined)?.['pen_name'] as string) ?? 'Unknown Author'}`;
   const pageUrl = `${getSiteUrl()}/books/${params.slug}`;
 
   return {
@@ -292,8 +93,12 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
   const reviewData = await getReviewData(book.id, book.author_id);
 
   // Normalise field names: ApiBook uses avg_rating; legacy Supabase shape uses average_rating
-  const avgRating = (book.avg_rating ?? (book as Record<string, unknown>)['average_rating']) as number | undefined;
-  const trailerVimeoId = (book as Record<string, unknown>)['trailer_vimeo_id'] as string | undefined;
+  const avgRating = (book.avg_rating ?? (book as Record<string, unknown>)['average_rating']) as
+    | number
+    | undefined;
+  const trailerVimeoId = (book as Record<string, unknown>)['trailer_vimeo_id'] as
+    | string
+    | undefined;
   const audioUrl = (book as Record<string, unknown>)['audio_url'] as string | undefined;
 
   return (
@@ -319,7 +124,9 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
                 by{' '}
                 {book.author_id ? (
                   <Link href={`/authors/${book.author_id}`} className="hover:text-primary">
-                    {(book.author as Record<string, unknown> | undefined)?.['pen_name'] as string ?? 'Unknown Author'}
+                    {((book.author as Record<string, unknown> | undefined)?.[
+                      'pen_name'
+                    ] as string) ?? 'Unknown Author'}
                   </Link>
                 ) : (
                   <span>Unknown Author</span>

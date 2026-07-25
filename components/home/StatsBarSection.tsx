@@ -1,4 +1,4 @@
-import { getPlatformStats } from '@/lib/supabase/queries';
+import { getPlatformStats } from '@/lib/data/stats';
 import { StatsBar, type Stat } from './StatsBar';
 
 /**

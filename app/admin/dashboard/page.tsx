@@ -1,31 +1,15 @@
 /* eslint-disable */
-import { createClient } from '@/lib/supabase/admin';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AdminQueryError, firstQueryError } from '../_lib/query-error';
+import { getAdminDashboardStats } from '@/lib/data/admin-dashboard';
+import { AdminQueryError } from '../_lib/query-error';
 
 export default async function AdminDashboard() {
-  const supabase = createClient();
-
-  const [usersResult, booksResult, ordersResult, activityResult] = await Promise.all([
-    supabase.from('profiles').select('*', { count: 'exact', head: true }),
-    supabase.from('books').select('*', { count: 'exact', head: true }),
-    supabase.from('orders').select('*', { count: 'exact', head: true }),
-    supabase
-      .from('engagement_events')
-      .select('*, book:books(title)')
-      .order('created_at', { ascending: false })
-      .limit(10),
-  ]);
-
-  const queryError = firstQueryError([usersResult, booksResult, ordersResult, activityResult]);
-  if (queryError) {
+  const result = await getAdminDashboardStats();
+  if (!result.ok) {
     return <AdminQueryError title="Admin Dashboard" />;
   }
 
-  const totalUsers = usersResult.count;
-  const totalBooks = booksResult.count;
-  const totalOrders = ordersResult.count;
-  const recentActivity = activityResult.data;
+  const { totalUsers, totalBooks, totalOrders, recentActivity } = result.data;
 
   return (
     <div className="space-y-8">
@@ -67,7 +51,7 @@ export default async function AdminDashboard() {
         <CardContent>
           {recentActivity && recentActivity.length > 0 ? (
             <div className="space-y-2">
-              {recentActivity.map((activity: any) => (
+              {recentActivity.map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-center justify-between border-b border-border p-2"

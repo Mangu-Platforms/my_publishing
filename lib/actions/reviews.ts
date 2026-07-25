@@ -37,7 +37,7 @@ async function detectVerifiedPurchase(
       .eq('user_id', userId)
       .maybeSingle();
     if (!profile) return false;
-    return await hasCompletedOrderForBook(admin, profile.id, bookId);
+    return await hasCompletedOrderForBook(admin, profile.id, bookId, userId);
   } catch (error) {
     console.warn('[reviews] verified-purchase lookup failed:', error);
     return false;

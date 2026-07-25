@@ -19,6 +19,8 @@ import { validateSafe, getFirstError } from '@/lib/validations/schemas';
 import { ReviewsQuerySchema, CreateReviewSchema } from '@/lib/validations/reviews';
 import { hasCompletedOrderForBook } from '@/lib/reading/entitlement';
 import { notifyAuthorOfNewReview } from '@/lib/email/triggers';
+import { listPublicReviewsPage } from '@/lib/data/reviews';
+import { isMongoPrimary } from '@/lib/db/provider';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,135 +68,46 @@ export async function GET(request: NextRequest) {
   const { bookId, sort, page = 1, limit = 10 } = parsed.data;
 
   try {
-    const admin = createAdminClient();
-
-    let query = admin
-      .from('reviews')
-      .select(
-        `
-        id,
-        book_id,
-        user_id,
-        rating,
-        title,
-        content,
-        is_spoiler,
-        helpful_count,
-        verified_purchase,
-        author_reply,
-        author_reply_at,
-        created_at,
-        updated_at
-      `,
-        { count: 'exact' }
-      )
-      .eq('book_id', bookId)
-      .eq('is_public', true);
-
-    switch (sort) {
-      case 'recent':
-        query = query.order('created_at', { ascending: false });
-        break;
-      case 'highest':
-        query = query
-          .order('rating', { ascending: false })
-          .order('created_at', { ascending: false });
-        break;
-      case 'lowest':
-        query = query
-          .order('rating', { ascending: true })
-          .order('created_at', { ascending: false });
-        break;
-      case 'helpful':
-      default:
-        query = query
-          .order('helpful_count', { ascending: false })
-          .order('created_at', { ascending: false });
-        break;
-    }
-
-    const from = (page - 1) * limit;
-    const { data: reviews, error, count } = await query.range(from, from + limit - 1);
-
-    if (error) throw error;
-
-    // Reviewer display profiles
-    const userIds = Array.from(new Set((reviews ?? []).map((r) => r.user_id)));
-    const { data: profiles } = userIds.length
-      ? await admin.from('profiles').select('user_id, full_name').in('user_id', userIds)
-      : { data: [] as Array<{ user_id: string; full_name: string | null }> };
-
-    const profilesByUserId = new Map((profiles ?? []).map((p) => [p.user_id, p]));
-
-    // Current user's votes on this page of reviews (best-effort, anonymous-safe)
-    const votesByReviewId = new Map<string, boolean>();
-    try {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user && (reviews ?? []).length) {
-        const { data: votes } = await admin
-          .from('review_votes')
-          .select('review_id, is_helpful')
-          .eq('user_id', user.id)
-          .in(
-            'review_id',
-            (reviews ?? []).map((r) => r.id)
-          );
-        for (const vote of votes ?? []) {
-          votesByReviewId.set(vote.review_id, vote.is_helpful);
-        }
-      }
-    } catch (voteErr) {
-      console.warn('[api/reviews] vote lookup failed (continuing without votes):', voteErr);
-    }
-
-    const normalized = (reviews ?? []).map((review) => {
-      const profile = profilesByUserId.get(review.user_id);
-      return {
-        ...review,
-        user_vote: votesByReviewId.get(review.id) ?? null,
-        user: {
-          id: review.user_id,
-          username: profile?.full_name || 'Reader',
-          full_name: profile?.full_name || undefined,
-        },
-      };
+    const data = await listPublicReviewsPage({
+      bookId,
+      sort: sort ?? 'helpful',
+      page,
+      limit,
     });
 
-    // Aggregate stats across ALL public reviews for the book (single cheap column)
-    const { data: allRatings } = await admin
-      .from('reviews')
-      .select('rating, verified_purchase')
-      .eq('book_id', bookId)
-      .eq('is_public', true);
-
-    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    let sum = 0;
-    let verifiedCount = 0;
-    for (const row of allRatings ?? []) {
-      distribution[row.rating] = (distribution[row.rating] || 0) + 1;
-      sum += row.rating;
-      if (row.verified_purchase) verifiedCount += 1;
+    // Current user's votes on this page (best-effort, anonymous-safe).
+    // review_votes is Supabase-shaped — skip when Mongo is primary.
+    if (!isMongoPrimary() && data.reviews.length) {
+      try {
+        const admin = createAdminClient();
+        const supabase = await createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: votes } = await admin
+            .from('review_votes')
+            .select('review_id, is_helpful')
+            .eq('user_id', user.id)
+            .in(
+              'review_id',
+              data.reviews.map((r) => r.id)
+            );
+          const votesByReviewId = new Map(
+            (votes ?? []).map((vote) => [vote.review_id, vote.is_helpful] as const)
+          );
+          for (const review of data.reviews) {
+            review.user_vote = votesByReviewId.get(review.id) ?? null;
+          }
+        }
+      } catch (voteErr) {
+        console.warn('[api/reviews] vote lookup failed (continuing without votes):', voteErr);
+      }
     }
-    const total = count ?? allRatings?.length ?? 0;
 
     return NextResponse.json({
       success: true,
-      data: {
-        reviews: normalized,
-        page,
-        limit,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / limit)),
-        stats: {
-          average: total ? Number((sum / (allRatings?.length || 1)).toFixed(2)) : 0,
-          total: allRatings?.length ?? 0,
-          distribution,
-          verifiedCount,
-        },
-      },
+      data,
     });
   } catch (err) {
     console.error('[api/reviews] GET failed:', err);
@@ -254,7 +167,12 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user.id)
         .maybeSingle();
       if (profile) {
-        verifiedPurchase = await hasCompletedOrderForBook(admin, profile.id, input.book_id);
+        verifiedPurchase = await hasCompletedOrderForBook(
+          admin,
+          profile.id,
+          input.book_id,
+          user.id
+        );
       }
     } catch (verifyErr) {
       console.warn('[api/reviews] verified-purchase lookup failed:', verifyErr);

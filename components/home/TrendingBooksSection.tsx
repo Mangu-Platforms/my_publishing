@@ -1,12 +1,17 @@
-import { getTrendingBooks } from '@/lib/supabase/queries';
+import { listTrendingBooks } from '@/lib/data/books';
 import { BookCard } from '@/components/cards/BookCard';
 import { Container } from '@/components/layout/Container';
 import { TrendingUp, BookOpen } from 'lucide-react';
 
 export async function TrendingBooksSection() {
-  const { data: books, error } = await getTrendingBooks(10);
+  let books: Awaited<ReturnType<typeof listTrendingBooks>> = [];
+  try {
+    books = await listTrendingBooks(10);
+  } catch {
+    books = [];
+  }
 
-  if (error || !books || books.length === 0) {
+  if (books.length === 0) {
     return (
       <section className="border-y border-border/50 bg-muted/10 py-16">
         <Container>

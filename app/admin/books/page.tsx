@@ -1,11 +1,11 @@
 /* eslint-disable */
-import { createClient } from '@/lib/supabase/admin';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { updateBookStatusAction } from '../actions';
 import { AdminQueryError } from '../_lib/query-error';
+import { listAdminBooks } from '@/lib/data/admin-books';
 
 const PAGE_SIZE = 10;
 
@@ -14,22 +14,17 @@ export default async function AdminBooksPage({
 }: {
   searchParams?: { q?: string; status?: string; page?: string };
 }) {
-  const supabase = createClient();
   const queryText = searchParams?.q?.trim() || '';
   const status = searchParams?.status || 'all';
   const currentPage = Math.max(Number(searchParams?.page || '1') || 1, 1);
-  const from = (currentPage - 1) * PAGE_SIZE;
-  const to = from + PAGE_SIZE - 1;
 
-  let query = supabase
-    .from('books')
-    .select('id, title, status, price, author:authors(pen_name)', { count: 'exact' })
-    .order('created_at', { ascending: false });
+  const { books, total, error } = await listAdminBooks({
+    q: queryText || undefined,
+    status,
+    page: currentPage,
+    perPage: PAGE_SIZE,
+  });
 
-  if (queryText) query = query.ilike('title', `%${queryText}%`);
-  if (status !== 'all') query = query.eq('status', status);
-
-  const { data: books, count, error } = await query.range(from, to);
   if (error) {
     console.error('[admin/books] query failed:', error);
     return (
@@ -41,7 +36,7 @@ export default async function AdminBooksPage({
     );
   }
 
-  const totalPages = Math.max(Math.ceil((count || 0) / PAGE_SIZE), 1);
+  const totalPages = Math.max(Math.ceil((total || 0) / PAGE_SIZE), 1);
   const pageHref = (page: number) => {
     const params = new URLSearchParams();
     if (queryText) params.set('q', queryText);
@@ -97,7 +92,7 @@ export default async function AdminBooksPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {books.map((book: any) => (
+                  {books.map((book) => (
                     <tr key={book.id} className="border-t border-border">
                       <td className="px-4 py-3">{book.title}</td>
                       <td className="px-4 py-3">{book.author?.pen_name || 'N/A'}</td>

@@ -1,13 +1,18 @@
 import Link from 'next/link';
-import { getFeaturedBooks } from '@/lib/supabase/queries';
+import { listFeaturedBooks } from '@/lib/data/books';
 import { BookCard } from '@/components/cards/BookCard';
 import { Container } from '@/components/layout/Container';
 import { ChevronRight, BookOpen } from 'lucide-react';
 
 export async function FeaturedBooksSection() {
-  const { data: books, error } = await getFeaturedBooks(8);
+  let books: Awaited<ReturnType<typeof listFeaturedBooks>> = [];
+  try {
+    books = await listFeaturedBooks(8);
+  } catch {
+    books = [];
+  }
 
-  if (error || !books || books.length === 0) {
+  if (books.length === 0) {
     return (
       <section className="bg-gradient-to-b from-background to-muted/20 py-16">
         <Container>

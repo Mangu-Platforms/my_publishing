@@ -1,48 +1,16 @@
 import Link from 'next/link';
-import { createPublicCatalogClient } from '@/lib/supabase/public-queries';
+import { listFeaturedAuthors } from '@/lib/data/authors';
 import { Container } from '@/components/layout/Container';
 import { Users } from 'lucide-react';
-import { unstable_cache } from 'next/cache';
-
-interface AuthorWithProfile {
-  id: string;
-  pen_name: string;
-  bio: string | null;
-  total_books: number;
-  is_verified: boolean;
-  profile: {
-    full_name: string | null;
-  } | null;
-}
-
-const getFeaturedAuthors = unstable_cache(
-  async (limit: number): Promise<AuthorWithProfile[]> => {
-    // Admin client: authors/profiles are not readable by anon under RLS.
-    const supabase = createPublicCatalogClient();
-    const { data, error } = await supabase
-      .from('authors')
-      .select('id, pen_name, bio, total_books, is_verified, profile:profiles(full_name)')
-      .eq('is_verified', true)
-      .order('total_books', { ascending: false })
-      .limit(limit);
-    if (error) throw error;
-    return (data as unknown as AuthorWithProfile[]) || [];
-  },
-  ['featured-authors'],
-  { tags: ['featured-authors'], revalidate: 3600 }
-);
-
-async function getFeaturedAuthorsSafe(limit = 4): Promise<AuthorWithProfile[]> {
-  try {
-    return await getFeaturedAuthors(limit);
-  } catch (error) {
-    console.error('Error fetching featured authors:', error);
-    return [];
-  }
-}
 
 export async function AuthorSpotlight() {
-  const authors = await getFeaturedAuthorsSafe(4);
+  let authors: Awaited<ReturnType<typeof listFeaturedAuthors>> = [];
+  try {
+    authors = await listFeaturedAuthors(4);
+  } catch (error) {
+    console.error('Error fetching featured authors:', error);
+    authors = [];
+  }
 
   if (authors.length === 0) {
     return (

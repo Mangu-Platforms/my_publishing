@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Container } from '@/components/layout/Container';
 import { cn } from '@/lib/utils/cn';
-import { getGenreCounts } from '@/lib/supabase/genre-counts';
+import { getGenreCounts } from '@/lib/data/genres';
 
 interface Genre {
   name: string;

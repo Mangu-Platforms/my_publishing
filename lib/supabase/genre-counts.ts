@@ -1,30 +1,18 @@
 import { unstable_cache } from 'next/cache';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
+import { slugifyGenre } from '@/lib/utils/genre';
+
+export { slugifyGenre };
 
 /**
- * Normalize a stored books.genre value to the slug used by genre tiles and
- * /genres/[genre] routes ('Sci-Fi' -> 'sci-fi', "Children's" -> 'childrens',
- * 'Non Fiction' -> 'non-fiction'). Apostrophes are dropped (not hyphenated)
- * to match the existing route slugs.
- */
-export function slugifyGenre(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, 'and')
-    .replace(/['’]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/**
- * Real per-genre book counts for the homepage genre grid (Phase 10 — replaces
- * the fabricated marketing numbers previously hardcoded in GenreExplorer).
- * Counts only status='published' AND visibility='public' books, matching the
- * public catalog rule. Cached for 1h; tagged for invalidation with book lists.
+ * Supabase implementation of per-genre book counts (Phase 10).
  *
- * Returns null when the query fails so the UI can render its unavailable
- * state instead of misleading zeros (true-zero vs unavailable distinction).
+ * Prefer `getGenreCounts` from `@/lib/data/genres` in UI code — that dual-run
+ * helper delegates here when DATABASE_PROVIDER=supabase and uses Mongo when
+ * DATABASE_PROVIDER=mongodb.
+ *
+ * Cached for 1h; tagged for invalidation with book lists. Returns null when
+ * the query fails so the UI can render its unavailable state.
  */
 export const getGenreCounts = unstable_cache(
   async (): Promise<Record<string, number> | null> => {
