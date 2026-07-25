@@ -5,14 +5,13 @@ name: Rotate Supabase Anon Key
 #
 # Trigger: manual only (workflow_dispatch).
 # Required GitHub Secrets (set once, never again):
-#   GH_PAT_SECRETS          – GitHub PAT with `secrets` scope (to upsert secrets)
 #   VERCEL_TOKEN            – your Vercel personal access token
 #   VERCEL_PROJECT_MY_PUBLISHING  – Vercel project ID for my_publishing
 #   VERCEL_PROJECT_MANGUPROJECTZ  – Vercel project ID for manguprojectz
 #   VERCEL_TEAM_ID          – Vercel team/org ID (leave empty for personal accounts)
 #
 # After this workflow completes Vercel will auto-redeploy both projects.
-# You still need to disable the OLD key in Supabase dashboard (shown in summary).
+# You still need to disable the OLD key in Supabase dashboard (step shown in summary).
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -37,9 +36,6 @@ jobs:
   rotate:
     name: Push key to GitHub Secrets + Vercel
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
       - name: Validate new key format
         run: |
@@ -85,7 +81,9 @@ jobs:
 
           upsert_vercel_env() {
             local env_key="$1" env_value="$2"
+            # Remove existing entries for all targets, then create fresh ones.
             for target in production preview; do
+              # Fetch existing env var ID for this key+target
               EXISTING_ID=$(curl -sf \
                 -H "Authorization: Bearer ${VERCEL_TOKEN}" \
                 "https://api.vercel.com/v9/projects/${PROJECT_ID}/env${TEAM_PARAM}" \
@@ -98,6 +96,7 @@ jobs:
                   "https://api.vercel.com/v9/projects/${PROJECT_ID}/env/${EXISTING_ID}${TEAM_PARAM}" \
                   > /dev/null
             done
+            # Create new entry covering both targets
             curl -sf -X POST \
               -H "Authorization: Bearer ${VERCEL_TOKEN}" \
               -H "Content-Type: application/json" \
@@ -152,12 +151,12 @@ jobs:
           if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
             echo "### 🔍 Dry run complete — no changes made" >> $GITHUB_STEP_SUMMARY
           else
-            echo "### Key rotated in GitHub Secrets + both Vercel projects" >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ Key rotated in GitHub Secrets + both Vercel projects" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Both Vercel projects will redeploy automatically." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Required manual step — disable the OLD key:**" >> $GITHUB_STEP_SUMMARY
             echo "1. Go to https://supabase.com/dashboard/project/tkzvikozrcynhwsqtkqp/settings/api" >> $GITHUB_STEP_SUMMARY
-            echo "2. Under **API Keys** → find the legacy anon JWT → click **Disable**" >> $GITHUB_STEP_SUMMARY
-            echo "3. Verify: curl -I https://tkzvikozrcynhwsqtkqp.supabase.co/rest/v1/ -H 'apikey: <OLD_KEY>' should return 401" >> $GITHUB_STEP_SUMMARY
+            echo "2. Under **API Keys** → find the legacy \`anon\` JWT → click **Disable**" >> $GITHUB_STEP_SUMMARY
+            echo "3. Verify: \`curl -I https://tkzvikozrcynhwsqtkqp.supabase.co/rest/v1/ -H \"apikey: <OLD_KEY>\"\` should return 401" >> $GITHUB_STEP_SUMMARY
           fi
