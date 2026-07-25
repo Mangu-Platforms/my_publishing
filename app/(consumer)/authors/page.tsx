@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createPublicCatalogClient, PUBLIC_AUTHOR_COLUMNS } from '@/lib/supabase/public-queries';
+import { listAuthorsForDirectory } from '@/lib/data/authors';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { AuthorCard } from '@/components/cards/AuthorCard';
@@ -33,19 +33,8 @@ export const revalidate = 300;
 
 type AuthorWithProfile = Author & { profile: Profile };
 
-async function getAuthors(): Promise<AuthorWithProfile[]> {
-  const supabase = createPublicCatalogClient();
-  const { data } = await supabase
-    .from('authors')
-    .select(PUBLIC_AUTHOR_COLUMNS)
-    .order('total_books', { ascending: false })
-    .order('created_at', { ascending: false });
-
-  return (data as unknown as AuthorWithProfile[]) || [];
-}
-
 export default async function AuthorsPage() {
-  const authors = await getAuthors();
+  const authors = (await listAuthorsForDirectory()) as unknown as AuthorWithProfile[];
 
   return (
     <div>

@@ -16,6 +16,63 @@ export type FeaturedAuthor = {
   profile: { full_name: string | null } | null;
 };
 
+export type DirectoryAuthor = {
+  id: string;
+  profile_id: string;
+  pen_name: string;
+  bio: string | null;
+  is_verified: boolean;
+  total_books: number;
+  photo_url: string | null;
+  created_at: string;
+  profile: { full_name: string | null } | null;
+};
+
+/**
+ * Public /authors directory — all authors ordered by total_books desc.
+ */
+export async function listAuthorsForDirectory(): Promise<DirectoryAuthor[]> {
+  if (isMongoPrimary()) {
+    try {
+      const { getDb } = await import('@/lib/mongo');
+      const db = await getDb();
+      const rows = await db.collection('authors').find({}).sort({ total_books: -1 }).toArray();
+
+      return rows.map((row) => {
+        const pen = String(row.pen_name ?? 'Author');
+        const created =
+          row.created_at instanceof Date
+            ? row.created_at.toISOString()
+            : String(row.created_at ?? '');
+        return {
+          id: String(row._id),
+          profile_id: row.profile_id != null ? String(row.profile_id) : '',
+          pen_name: pen,
+          bio: (row.bio as string | null | undefined) ?? null,
+          is_verified: Boolean(row.is_verified),
+          total_books: Number(row.total_books ?? 0),
+          photo_url: (row.photo_url as string | null | undefined) ?? null,
+          created_at: created,
+          profile: { full_name: pen },
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  const { createPublicCatalogClient, PUBLIC_AUTHOR_COLUMNS } =
+    await import('@/lib/supabase/public-queries');
+  const supabase = createPublicCatalogClient();
+  const { data } = await supabase
+    .from('authors')
+    .select(PUBLIC_AUTHOR_COLUMNS)
+    .order('total_books', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  return (data as unknown as DirectoryAuthor[]) || [];
+}
+
 /**
  * Homepage Author Spotlight — verified authors ordered by total_books.
  */

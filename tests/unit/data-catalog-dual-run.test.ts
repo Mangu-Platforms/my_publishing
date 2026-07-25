@@ -74,6 +74,8 @@ jest.mock('@/lib/mongo', () => ({
 const mockMaybeSingle = jest.fn();
 const mockEq = jest.fn();
 const mockSelect = jest.fn();
+/** Resolves when a list/query chain is awaited (e.g. listAudiobooks `.not(...)`). */
+const mockListResult = jest.fn(async () => ({ data: [] as unknown[], error: null }));
 
 jest.mock('@/lib/supabase/public-queries', () => ({
   createPublicCatalogClient: () => ({
@@ -85,15 +87,22 @@ jest.mock('@/lib/supabase/public-queries', () => ({
           mockEq(...eqArgs);
           return chain;
         };
+        chain.not = () => chain;
         chain.order = () => chain;
         chain.limit = () => chain;
         chain.maybeSingle = () => mockMaybeSingle();
         chain.single = () => mockMaybeSingle();
+        // Thenable so `await supabase.from(...).eq(...).not(...)` resolves.
+        chain.then = (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+          mockListResult().then(onFulfilled, onRejected);
         return chain;
       },
     }),
   }),
   PUBLIC_BOOK_SELECT: '*',
+  PUBLIC_BOOK_WITH_CONTENT_SELECT: '*, content:book_content(*)',
+  PUBLIC_AUTHOR_COLUMNS:
+    'id, profile_id, pen_name, bio, is_verified, total_books, photo_url, created_at, profile:profiles(full_name)',
 }));
 
 jest.mock('@/lib/supabase/server', () => ({
@@ -292,6 +301,55 @@ describe('listFeaturedAuthors dual-run', () => {
     const authors = await listFeaturedAuthors(4);
     expect(authors).toHaveLength(1);
     expect(authors[0].pen_name).toBe('Ada');
+  });
+});
+
+describe('listAuthorsForDirectory dual-run', () => {
+  afterEach(() => {
+    mockIsMongoPrimary.mockReset();
+    mockIsMongoPrimary.mockReturnValue(false);
+    jest.resetModules();
+  });
+
+  it('lists authors from Mongo sorted by total_books when primary', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    const mockSort = jest.fn(() => ({
+      toArray: jest.fn(async () => [
+        {
+          _id: 'a2',
+          profile_id: 'p2',
+          pen_name: 'Zed',
+          bio: 'Writer',
+          total_books: 10,
+          is_verified: true,
+          photo_url: null,
+          created_at: new Date('2026-01-02'),
+        },
+        {
+          _id: 'a1',
+          profile_id: 'p1',
+          pen_name: 'Ada',
+          bio: null,
+          total_books: 3,
+          is_verified: false,
+          photo_url: null,
+          created_at: new Date('2026-01-01'),
+        },
+      ]),
+    }));
+    const mockFind = jest.fn(() => ({ sort: mockSort }));
+    mockGetDb.mockResolvedValueOnce({
+      collection: jest.fn(() => ({ find: mockFind })),
+    });
+
+    const { listAuthorsForDirectory } = await import('@/lib/data/authors');
+    const authors = await listAuthorsForDirectory();
+    expect(mockFind).toHaveBeenCalledWith({});
+    expect(mockSort).toHaveBeenCalledWith({ total_books: -1 });
+    expect(authors).toHaveLength(2);
+    expect(authors[0].pen_name).toBe('Zed');
+    expect(authors[0].id).toBe('a2');
+    expect(authors[0].total_books).toBe(10);
   });
 });
 
