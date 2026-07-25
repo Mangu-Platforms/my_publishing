@@ -39,19 +39,19 @@ export type { BookMetadata, CreateBookInput, UpdateBookInput, BookSearchResult }
 // Re-export BookStats from analytics (more comprehensive)
 export type { BookStats as AnalyticsBookStats } from './analytics';
 
-// Database types (Supabase generated - you may need to regenerate these)
+// Database types (Supabase generated).
+//
+// `BookWithAuthor`, `BookFull`, `BookStatus`, `Profile`, `Author`, `Book` and `Order`
+// are deliberately NOT re-exported here: this module declares its own hand-written
+// versions of those names below, and re-exporting both made every one a TS2484
+// conflict. The local declarations are the ones consumers of `@/types` already
+// resolve to. Import the Supabase-generated variants from `@/types/database`
+// directly (as `lib/supabase/queries.ts` and the partner portal do).
 export type {
   Database,
-  BookWithAuthor,
-  BookFull,
   BookWithContent,
-  BookStatus,
   UserRole,
-  Profile,
-  Author,
-  Book,
   BookContent,
-  Order,
   OrderItem,
   OrderWithItems,
   ManuscriptWithAuthor,

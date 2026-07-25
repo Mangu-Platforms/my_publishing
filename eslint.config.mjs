@@ -14,6 +14,8 @@ export default [
       'playwright-report/**',
       'test-results/**',
       'next-env.d.ts',
+      // Vendored standalone Vite app with its own toolchain and dependency tree.
+      'tools/preflight-dashboard/**',
     ],
   },
   ...coreWebVitals,

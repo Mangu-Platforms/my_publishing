@@ -69,6 +69,29 @@ Prefer GitHub Actions `prod-health-watch.yml` (in-repo). If you also want a Curs
 
 ---
 
+## Cloud Agent environment (repo-owned)
+
+`.cursor/environment.json` is committed and **overrides** any personal or team
+dashboard environment (Cursor resolution order: repo file → personal → team).
+It runs `bash .cursor/install.sh` on every VM boot.
+
+That script exists because two install-time faults kept bricking cloud agents
+(diagnosed 2026-07-25 — see PR #348):
+
+1. **Lockfile drift** — `npm ci` exits `EUSAGE` when `package.json` and the
+   lockfile disagree. The script falls back to `npm install` and warns.
+2. **Node shadowing** — `/exec-daemon/node` is v22.14.0 and precedes nvm on the
+   default PATH. Combined with `engine-strict=true` and
+   `engines.node >= 22.22.1`, a bare `npm ci` fails `EBADENGINE`. The script
+   pins `.nvmrc`'s node onto `PATH` first and appends the pin to `~/.bashrc`.
+
+Do **not** re-record a personal SETUP_FLOW install that only runs `npm ci` —
+it will be ignored while the repo file is present, and recreating it after
+deleting the repo file would reintroduce both faults. Edit
+`.cursor/install.sh` instead.
+
+---
+
 ## One-shot Cloud Agent prompt (manual)
 
 When starting a new agent by hand, paste:

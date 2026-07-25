@@ -1,0 +1,4 @@
+{
+  "name": "mangu-publishers",
+  "install": "bash .cursor/install.sh"
+}

@@ -3,9 +3,8 @@ import { BookCard } from '@/components/cards/BookCard';
 import type { BookCardBook } from '@/components/cards/BookCard';
 
 function buildHref(book: BookCardBook): string {
-  const ct = (book as Record<string, unknown>)['content_type'];
-  if (ct === 'comic') return `/comics/${book.slug}`;
-  if (ct === 'paper') return `/papers/${book.slug}`;
+  if (book.content_type === 'comic') return `/comics/${book.slug}`;
+  if (book.content_type === 'paper') return `/papers/${book.slug}`;
   return `/books/${book.slug}`;
 }
 

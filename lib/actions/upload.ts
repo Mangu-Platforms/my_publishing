@@ -54,9 +54,7 @@ async function uploadToSupabase(
   const filePath = `${userId}/${fileName}`;
   const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-  const { data: existing } = await supabase.storage
-    .from(bucket)
-    .list(userId, { search: fileName });
+  const { data: existing } = await supabase.storage.from(bucket).list(userId, { search: fileName });
   const alreadyUploaded = existing?.some((obj) => obj.name === fileName) ?? false;
 
   if (!alreadyUploaded) {
@@ -89,8 +87,9 @@ async function getAuthenticatedUserId(): Promise<string> {
   const { isBetterAuthPrimary } = await import('@/lib/auth/provider');
 
   if (isBetterAuthPrimary()) {
-    const { auth } = await import('@/lib/auth');
+    const { getAuth } = await import('@/lib/auth');
     const { headers } = await import('next/headers');
+    const auth = await getAuth();
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user?.id) throw new Error('Unauthorized');
     return session.user.id;

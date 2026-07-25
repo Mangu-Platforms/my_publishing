@@ -20,7 +20,8 @@ export const dynamic = 'force-dynamic';
 async function getSessionUserId(request: Request): Promise<string | null> {
   try {
     if (isBetterAuthPrimary()) {
-      const { auth } = await import('@/lib/auth');
+      const { getAuth } = await import('@/lib/auth');
+      const auth = await getAuth();
       const session = await auth.api.getSession({
         headers: new Headers(request.headers),
       });
@@ -97,11 +98,7 @@ async function getUserRole(userId: string): Promise<string> {
 
   const { createClient } = await import('@/lib/supabase/admin');
   const admin = createClient();
-  const { data } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('user_id', userId)
-    .maybeSingle();
+  const { data } = await admin.from('profiles').select('role').eq('user_id', userId).maybeSingle();
   return (data?.role as string) ?? 'reader';
 }
 
@@ -143,8 +140,7 @@ export async function GET(
       return NextResponse.json({ error: 'File unavailable' }, { status: 502 });
     }
 
-    const contentType =
-      upstream.headers.get('content-type') || 'application/octet-stream';
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
     const contentLength = upstream.headers.get('content-length');
 
     const headers: Record<string, string> = {
