@@ -1,5 +1,6 @@
 /**
- * Dual-run book review page data (Phoenix WS2d.1 Slice E / API pagination).
+ * Dual-run book review page data (Phoenix WS2d.1 Slice E / API pagination /
+ * my-reviews dashboard).
  * Auth session still from AUTH_PROVIDER; review docs gated by DATABASE_PROVIDER.
  */
 
@@ -602,4 +603,207 @@ export async function listPublicReviewsPage(opts: {
     return loadMongoPublicReviewsPage({ bookId: opts.bookId, sort, page, limit });
   }
   return loadSupabasePublicReviewsPage({ bookId: opts.bookId, sort, page, limit });
+}
+
+// ---------------------------------------------------------------------------
+// My Reviews dashboard (/dashboard/my-reviews) — dual-run
+// ---------------------------------------------------------------------------
+
+export type MyReviewBook = {
+  id: string;
+  slug: string;
+  title: string;
+  cover_url: string | null;
+};
+
+export type MyReviewRow = {
+  id: string;
+  book_id: string;
+  user_id: string;
+  rating: number;
+  title: string | null;
+  content: string;
+  is_spoiler: boolean;
+  is_public: boolean;
+  helpful_count: number;
+  created_at: string;
+  updated_at: string;
+  book: MyReviewBook | null;
+};
+
+export type MyReviewsResult = {
+  reviews: MyReviewRow[];
+  profile: {
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+};
+
+function normalizeBookEmbed(book: unknown): MyReviewBook | null {
+  const row = Array.isArray(book) ? book[0] : book;
+  if (!row || typeof row !== 'object') return null;
+  const b = row as Record<string, unknown>;
+  const id = b.id != null ? String(b.id) : '';
+  if (!id && !b.slug) return null;
+  return {
+    id: id || String(b.slug ?? ''),
+    slug: String(b.slug ?? ''),
+    title: String(b.title ?? ''),
+    cover_url: (b.cover_url as string | null | undefined) ?? null,
+  };
+}
+
+async function listMyReviewsMongo(authUserId: string): Promise<MyReviewsResult> {
+  const { getDb } = await import('@/lib/mongo');
+  const { ObjectId } = await import('mongodb');
+  const db = await getDb();
+
+  const profile = await db.collection('profiles').findOne({ auth_user_id: authUserId });
+  const displayName = profile?.display_name != null ? String(profile.display_name) : null;
+  const avatarUrl = profile?.avatar_url != null ? String(profile.avatar_url) : null;
+
+  const rows = await db
+    .collection('reviews')
+    .find({ user_id: authUserId })
+    .sort({ created_at: -1 })
+    .toArray();
+
+  const bookIds = Array.from(
+    new Set(
+      rows
+        .map((r) => r.book_id)
+        .filter((id) => id != null)
+        .map((id) => String(id))
+    )
+  );
+
+  const bookObjectIds = bookIds
+    .filter((id) => /^[a-fA-F0-9]{24}$/.test(id))
+    .map((id) => new ObjectId(id));
+
+  const bookOr: Record<string, unknown>[] = [];
+  if (bookObjectIds.length) bookOr.push({ _id: { $in: bookObjectIds } });
+  if (bookIds.length) {
+    bookOr.push({ _id: { $in: bookIds } });
+    bookOr.push({ slug: { $in: bookIds } });
+  }
+
+  const bookRows =
+    bookOr.length > 0
+      ? await db
+          .collection('books')
+          .find({ $or: bookOr })
+          .project({ _id: 1, slug: 1, title: 1, cover_url: 1 })
+          .toArray()
+      : [];
+
+  const booksById = new Map<string, MyReviewBook>();
+  for (const b of bookRows) {
+    const mapped: MyReviewBook = {
+      id: String(b._id),
+      slug: String(b.slug ?? ''),
+      title: String(b.title ?? ''),
+      cover_url: (b.cover_url as string | null | undefined) ?? null,
+    };
+    booksById.set(mapped.id, mapped);
+    if (mapped.slug) booksById.set(mapped.slug, mapped);
+  }
+
+  const reviews: MyReviewRow[] = rows.map((row) => {
+    const bookId = String(row.book_id);
+    return {
+      id: String(row._id),
+      book_id: bookId,
+      user_id: String(row.user_id),
+      rating: Number(row.rating ?? 0),
+      title: (row.title as string | null | undefined) ?? null,
+      content: String(row.content ?? ''),
+      is_spoiler: Boolean(row.is_spoiler ?? false),
+      // Missing is_public ⇒ published (parity with public list / transform).
+      is_public: row.is_public === undefined ? true : Boolean(row.is_public),
+      helpful_count: Number(row.helpful_count ?? 0),
+      created_at: iso(row.created_at),
+      updated_at: iso(row.updated_at),
+      book: booksById.get(bookId) ?? null,
+    };
+  });
+
+  return {
+    reviews,
+    profile: {
+      full_name: displayName,
+      avatar_url: avatarUrl,
+    },
+  };
+}
+
+async function listMyReviewsSupabase(authUserId: string): Promise<MyReviewsResult> {
+  const { createClient: createAdminClient } = await import('@/lib/supabase/admin');
+  const admin = createAdminClient();
+
+  const [{ data: profile }, { data: reviewRows, error }] = await Promise.all([
+    admin.from('profiles').select('full_name').eq('user_id', authUserId).maybeSingle(),
+    admin
+      .from('reviews')
+      .select(
+        `
+      id,
+      book_id,
+      user_id,
+      rating,
+      title,
+      content,
+      is_spoiler,
+      is_public,
+      helpful_count,
+      created_at,
+      updated_at,
+      book:books (
+        id,
+        slug,
+        title,
+        cover_url
+      )
+    `
+      )
+      .eq('user_id', authUserId)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  if (error) throw error;
+
+  const reviews: MyReviewRow[] = (reviewRows ?? []).map((row) => ({
+    id: String(row.id),
+    book_id: String(row.book_id),
+    user_id: String(row.user_id),
+    rating: Number(row.rating ?? 0),
+    title: (row.title as string | null | undefined) ?? null,
+    content: String(row.content ?? ''),
+    is_spoiler: Boolean(row.is_spoiler ?? false),
+    is_public:
+      row.is_public === undefined || row.is_public === null ? true : Boolean(row.is_public),
+    helpful_count: Number(row.helpful_count ?? 0),
+    created_at: String(row.created_at ?? ''),
+    updated_at: String(row.updated_at ?? ''),
+    book: normalizeBookEmbed(row.book),
+  }));
+
+  return {
+    reviews,
+    profile: {
+      full_name: profile?.full_name ?? null,
+      avatar_url: null,
+    },
+  };
+}
+
+/**
+ * All reviews authored by `authUserId` (published + drafts) with book embeds.
+ * Gated by DATABASE_PROVIDER (default supabase). Auth stays on AUTH_PROVIDER.
+ */
+export async function listMyReviews(authUserId: string): Promise<MyReviewsResult> {
+  if (isMongoPrimary()) {
+    return listMyReviewsMongo(authUserId);
+  }
+  return listMyReviewsSupabase(authUserId);
 }

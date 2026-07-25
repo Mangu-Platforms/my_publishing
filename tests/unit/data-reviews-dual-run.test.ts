@@ -1,7 +1,8 @@
 /** @jest-environment node */
 
 /**
- * Phoenix WS2d.1 Slice E — getBookReviewPage + listPublicReviewsPage dual-run
+ * Phoenix WS2d.1 Slice E — getBookReviewPage + listPublicReviewsPage +
+ * listMyReviews dual-run
  */
 
 const mockIsMongoPrimary = jest.fn(() => false);
@@ -86,6 +87,12 @@ jest.mock('@/lib/supabase/admin', () => ({
             author_reply_at: null,
             created_at: '2026-01-01',
             updated_at: '2026-01-01',
+            book: {
+              id: 'b1',
+              slug: 'great-book',
+              title: 'Great Book',
+              cover_url: null,
+            },
           },
         ];
         const result = { data: rows, error: null, count: 1 };
@@ -117,7 +124,7 @@ jest.mock('@/lib/supabase/admin', () => ({
               });
             },
             eq: () => ({
-              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              maybeSingle: () => mockMaybeSingle(),
             }),
           }),
         };
@@ -274,5 +281,91 @@ describe('listPublicReviewsPage', () => {
     expect(result.stats.distribution[5]).toBe(1);
     expect(result.stats.distribution[3]).toBe(1);
     expect(result.stats.verifiedCount).toBe(1);
+  });
+});
+
+describe('listMyReviews', () => {
+  afterEach(() => {
+    mockIsMongoPrimary.mockReset();
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockFindToArray.mockReset();
+    mockFindOne.mockReset();
+    mockSkip.mockReset();
+    mockSort.mockReset();
+    mockLimit.mockReset();
+    mockOrder.mockReset();
+    mockMaybeSingle.mockReset();
+    jest.resetModules();
+  });
+
+  it('loads supabase reviews + profile by default', async () => {
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockMaybeSingle.mockResolvedValue({ data: { full_name: 'Pat' }, error: null });
+
+    const { listMyReviews } = await import('@/lib/data/reviews');
+    const result = await listMyReviews('u1');
+
+    expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(result.reviews).toHaveLength(1);
+    expect(result.reviews[0].content).toBe('Great');
+    expect(result.reviews[0].is_public).toBe(true);
+    expect(result.reviews[0].book?.slug).toBe('great-book');
+    expect(result.profile.full_name).toBe('Pat');
+    expect(result.profile.avatar_url).toBeNull();
+  });
+
+  it('loads mongo reviews + profile when primary (missing is_public ⇒ published)', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    mockFindOne.mockResolvedValue({
+      auth_user_id: 'auth1',
+      display_name: 'Ada',
+      avatar_url: 'https://example.com/a.png',
+    });
+    mockFindToArray
+      .mockResolvedValueOnce([
+        {
+          _id: 'mr1',
+          book_id: '507f1f77bcf86cd799439011',
+          user_id: 'auth1',
+          rating: 4,
+          content: 'My mongo review',
+          is_spoiler: false,
+          // is_public omitted ⇒ published
+          helpful_count: 6,
+          created_at: new Date('2026-01-02'),
+          updated_at: new Date('2026-01-03'),
+        },
+        {
+          _id: 'mr2',
+          book_id: '507f1f77bcf86cd799439011',
+          user_id: 'auth1',
+          rating: 2,
+          content: 'Draft thoughts',
+          is_public: false,
+          helpful_count: 0,
+          created_at: new Date('2026-01-01'),
+          updated_at: new Date('2026-01-01'),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          _id: '507f1f77bcf86cd799439011',
+          slug: 'mongo-book',
+          title: 'Mongo Book',
+          cover_url: null,
+        },
+      ]);
+
+    const { listMyReviews } = await import('@/lib/data/reviews');
+    const result = await listMyReviews('auth1');
+
+    expect(mockSort).toHaveBeenCalledWith({ created_at: -1 });
+    expect(result.profile.full_name).toBe('Ada');
+    expect(result.profile.avatar_url).toBe('https://example.com/a.png');
+    expect(result.reviews).toHaveLength(2);
+    expect(result.reviews[0].is_public).toBe(true);
+    expect(result.reviews[0].book?.slug).toBe('mongo-book');
+    expect(result.reviews[1].is_public).toBe(false);
+    expect(result.reviews[1].content).toBe('Draft thoughts');
   });
 });
