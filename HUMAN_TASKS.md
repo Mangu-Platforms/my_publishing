@@ -26,6 +26,19 @@ Schedule suggestion: 2×/day UTC. Details: `docs/COWORK_OPERATOR.md`.
 
 Optional second automation: `.cursor/automations/prod-health-triage.prompt.md` (manual / rare).
 
+### C0.2b Cloud Agent environment — now repo-owned (2026-07-25)
+
+`.cursor/environment.json` + `.cursor/install.sh` are committed (PR #348) and
+**override** the personal SETUP_FLOW environment recorded in the dashboard
+(`environmentPublicId: c272e120-…`). No dashboard action required for the
+override itself — Cursor resolves repo file → personal → team.
+
+**Do not** re-record a personal install that only runs `npm ci`. That is exactly
+the command that failed with `EUSAGE` (lockfile drift) and would next fail with
+`EBADENGINE` (Node v22.14.0 from `/exec-daemon` shadowed `.nvmrc`'s v22.22.2).
+Edit `.cursor/install.sh` instead. Details: `docs/COWORK_OPERATOR.md` § Cloud
+Agent environment.
+
 ### C0.3 Path decision — LOCKED to Phoenix (B)
 
 **Resolved (owner-confirmed 2026-07-20):** Project Phoenix is **ACTIVE**. Owner Faith
