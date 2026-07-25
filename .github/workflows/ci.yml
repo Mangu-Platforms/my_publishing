@@ -27,4 +27,8 @@ jobs:
       - run: npm run validate:gap-ledger
       - run: npm run type-check
       - run: npm run lint
+      # Phoenix contract rule 6: Jest must pass before merge. Runs before the
+      # build so a logic regression fails fast, and so the suite never sees
+      # .next/ output.
+      - run: npm test
       - run: npm run build

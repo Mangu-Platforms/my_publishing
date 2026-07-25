@@ -19,8 +19,19 @@ const customJestConfig = {
     '!**/.next/**',
   ],
   testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
-  testPathIgnorePatterns: ['<rootDir>/tests/e2e/'],
-  modulePathIgnorePatterns: ['<rootDir>/node_modules.bak.'],
+  testPathIgnorePatterns: [
+    '<rootDir>/tests/e2e/',
+    '<rootDir>/.next/',
+    // Vendored standalone Vite app with its own toolchain.
+    '<rootDir>/tools/preflight-dashboard/',
+  ],
+  // .next/standalone re-emits a package.json named like the root one, which
+  // collides in Jest's haste map once a build has run in the same workspace.
+  modulePathIgnorePatterns: [
+    '<rootDir>/node_modules.bak.',
+    '<rootDir>/.next/',
+    '<rootDir>/tools/preflight-dashboard/',
+  ],
 };
 
 // Use async form so we can override transformIgnorePatterns AFTER nextJest sets them.
