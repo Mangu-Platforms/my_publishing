@@ -5,6 +5,17 @@ does not have. Everything else is being executed autonomously. Ordered by priori
 
 ## Cowork control (do these first)
 
+### C0.0 Merge Phoenix WS2d PR #349 to `main` — BLOCKED ON YOU (2026-07-25)
+
+**PR:** https://github.com/redinc23/my_publishing/pull/349  
+**Branch:** `cursor/phoenix-ws2d-query-layer-a030`  
+**CI:** green (`ci` SUCCESS). **Auto-merge (squash)** already armed.  
+**Blocker:** branch protection — needs **≥1 approving review** from someone with write access. Agents cannot satisfy that from this environment (`gh pr merge --admin` rejected).
+
+**Click path:** open PR → **Review** → **Approve** → auto-merge should land squash to `main`.
+
+**Handoff for next agents after merge:** `docs/PHOENIX_WS2D_AGENT_HANDOFF.md`
+
 ### C0.1 Disable Cursor storm automations — STILL REQUIRED (verified 2026-07-19)
 
 Both are still **`enabled: true`** and still opening draft PRs:
