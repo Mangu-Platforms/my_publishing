@@ -6,52 +6,12 @@ import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/server';
-import { createPublicCatalogClient } from '@/lib/supabase/public-queries';
+import { fetchPublishedBookForCheckout } from '@/lib/data/books';
 import { createCheckoutSession } from '@/lib/stripe/server';
 
 interface CheckoutSearchParams {
   book_id?: string;
   slug?: string;
-}
-
-interface BookCheckoutSummary {
-  id: string;
-  slug: string | null;
-  title: string;
-  cover_url: string | null;
-  price: number;
-  discount_price: number | null;
-  author: {
-    pen_name: string | null;
-    profile: {
-      full_name: string | null;
-    } | null;
-  } | null;
-}
-
-async function getBookSummary({ book_id, slug }: CheckoutSearchParams) {
-  if (!book_id && !slug) {
-    return null;
-  }
-
-  const supabase = createPublicCatalogClient();
-  let query = supabase
-    .from('books')
-    .select(
-      'id, slug, title, cover_url, price, discount_price, author:authors(pen_name, profile:profiles(full_name))'
-    )
-    .eq('status', 'published')
-    .eq('visibility', 'public');
-
-  if (book_id) {
-    query = query.eq('id', book_id);
-  } else if (slug) {
-    query = query.eq('slug', slug);
-  }
-
-  const { data } = await query.single();
-
-  return data as BookCheckoutSummary | null;
 }
 
 async function startCheckout(formData: FormData) {
@@ -68,10 +28,9 @@ async function startCheckout(formData: FormData) {
     redirect('/login');
   }
 
-  // Look up the purchasable book directly — an HTTP self-fetch would drop
-  // the caller's auth cookies (401) and hard-codes the wrong port in dev.
-  const book = await getBookSummary({
-    book_id: bookId || undefined,
+  // Dual-run catalog read (WS2d.1). Auth remains AUTH_PROVIDER until cutover.
+  const book = await fetchPublishedBookForCheckout({
+    id: bookId || undefined,
     slug: bookSlug || undefined,
   });
 
@@ -116,7 +75,7 @@ export default async function CheckoutPage({
     redirect('/login');
   }
 
-  const book = await getBookSummary(searchParams);
+  const book = await fetchPublishedBookForCheckout(searchParams);
 
   if (!book) {
     notFound();
