@@ -154,10 +154,7 @@ describe('getAdminDashboardStats dual-run', () => {
 
   it('counts Mongo collections and returns [] when engagement_events missing', async () => {
     mockIsMongoPrimary.mockReturnValue(true);
-    mockCountDocuments
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(3)
-      .mockResolvedValueOnce(2);
+    mockCountDocuments.mockResolvedValueOnce(5).mockResolvedValueOnce(3).mockResolvedValueOnce(2);
     mockListCollectionsToArray.mockResolvedValue([]);
 
     const { getAdminDashboardStats } = await import('@/lib/data/admin-dashboard');
