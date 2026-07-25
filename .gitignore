@@ -70,3 +70,10 @@ node_modules.trash*/
 .SERVER_RESTORE_LOCK
 SERVER_PID.txt
 .tmp-audit-report.txt
+
+# Phoenix Phase 11 migration artifacts — contain real user PII (emails, orders,
+# locked credential sentinels). Produced by scripts/export-supabase.sh,
+# transform-data.ts, export-delta.ts and send-forced-resets.ts. NEVER commit.
+/export/
+storage-migration-report.json
+forced-reset-progress.json
