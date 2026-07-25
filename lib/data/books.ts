@@ -550,6 +550,194 @@ export async function fetchPublishedBookForCheckout(idOrSlug: {
   return (data as CheckoutBookSummary | null) ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// Audiobooks (/audio, /audio/[id]) — WS2d.1
+//
+// Live audio lives on Supabase `book_content.audio_url` (joined onto books).
+// Mongo `Book` has `content_type?: 'book'|'comic'|'paper'` but NO audio_url /
+// book_content equivalent yet (see fetchBookForApi: audio_url: null). Until
+// that schema lands, Mongo primary returns [] / null; Supabase path stays
+// authoritative for the default DATABASE_PROVIDER=supabase dual-run.
+// ---------------------------------------------------------------------------
+
+export type AudiobookCatalogEntry = {
+  id: string;
+  title: string;
+  author: string;
+  coverUrl?: string;
+  audioUrl: string;
+  narrator?: string;
+  durationSec?: number;
+};
+
+export type AudiobookDetail = {
+  id: string;
+  title: string;
+  description?: string | null;
+  cover_url?: string | null;
+  author: {
+    pen_name?: string | null;
+    profile?: { full_name?: string | null } | null;
+  } | null;
+  audioUrl: string;
+  chapters: Array<{ id: string; title: string; start: number; end?: number }>;
+  narrator?: string;
+  durationSec?: number;
+  /** Raw content row for callers that need toc / extras. */
+  content: Record<string, unknown>;
+};
+
+function contentRowsFromBook(book: { content?: unknown }): Record<string, unknown>[] {
+  const contentRows = book.content;
+  if (Array.isArray(contentRows)) {
+    return contentRows.filter((r): r is Record<string, unknown> => !!r && typeof r === 'object');
+  }
+  if (contentRows && typeof contentRows === 'object') {
+    return [contentRows as Record<string, unknown>];
+  }
+  return [];
+}
+
+function pickAudioContentRow(book: { content?: unknown }): Record<string, unknown> | null {
+  return (
+    contentRowsFromBook(book).find(
+      (r) => typeof r.audio_url === 'string' && (r.audio_url as string).length > 0
+    ) ?? null
+  );
+}
+
+function pickNarrator(
+  row: Record<string, unknown>,
+  book?: Record<string, unknown>
+): string | undefined {
+  if (typeof row.narrator === 'string' && row.narrator.trim() !== '') {
+    return row.narrator;
+  }
+  if (book && typeof book.narrator === 'string' && book.narrator.trim() !== '') {
+    return book.narrator as string;
+  }
+  return undefined;
+}
+
+function pickDurationSec(
+  row: Record<string, unknown>,
+  chapters: Array<{ end?: number }>
+): number | undefined {
+  for (const key of ['audio_duration', 'duration_seconds', 'duration']) {
+    const value = row[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return value;
+    }
+  }
+  const last = chapters[chapters.length - 1];
+  if (last?.end) return last.end;
+  return undefined;
+}
+
+function authorDisplayName(book: {
+  author?: {
+    pen_name?: string | null;
+    profile?: { full_name?: string | null } | null;
+  } | null;
+}): string {
+  return book.author?.profile?.full_name || book.author?.pen_name || 'Unknown Author';
+}
+
+/**
+ * Published+public books that have a non-null `book_content.audio_url`.
+ * Mongo: empty until Book gains audio fields (documented above).
+ */
+export async function listAudiobooks(): Promise<AudiobookCatalogEntry[]> {
+  if (isMongoPrimary()) {
+    // Fallback: Mongo Book has no audio_url / book_content join yet.
+    return [];
+  }
+
+  const { createPublicCatalogClient, PUBLIC_BOOK_SELECT } =
+    await import('@/lib/supabase/public-queries');
+  const supabase = createPublicCatalogClient();
+  const { data } = await supabase
+    .from('books')
+    .select(`${PUBLIC_BOOK_SELECT}, content:book_content!inner(*)`)
+    .eq('status', 'published')
+    .eq('visibility', 'public')
+    .not('content.audio_url', 'is', null);
+
+  const { parseChapters } = await import('@/components/audio/parse-chapters');
+
+  const entries: AudiobookCatalogEntry[] = [];
+  for (const book of (data as Array<Record<string, unknown>>) || []) {
+    const row = pickAudioContentRow(book);
+    if (!row) continue;
+    const chapters = parseChapters(row.toc);
+    const cover = book.cover_url;
+    entries.push({
+      id: String(book.id),
+      title: String(book.title ?? ''),
+      author: authorDisplayName(
+        book as {
+          author?: {
+            pen_name?: string | null;
+            profile?: { full_name?: string | null } | null;
+          } | null;
+        }
+      ),
+      ...(typeof cover === 'string' && cover ? { coverUrl: cover } : {}),
+      audioUrl: row.audio_url as string,
+      narrator: pickNarrator(row, book),
+      durationSec: pickDurationSec(row, chapters),
+    });
+  }
+  return entries;
+}
+
+/**
+ * Single published+public audiobook by id (requires audio_url on book_content).
+ * Mongo: null until Book gains audio fields (documented above).
+ */
+export async function fetchAudiobookById(id: string): Promise<AudiobookDetail | null> {
+  if (!id) return null;
+
+  if (isMongoPrimary()) {
+    // Fallback: Mongo Book has no audio_url / book_content join yet.
+    return null;
+  }
+
+  const { createPublicCatalogClient, PUBLIC_BOOK_WITH_CONTENT_SELECT } =
+    await import('@/lib/supabase/public-queries');
+  const supabase = createPublicCatalogClient();
+  const { data } = await supabase
+    .from('books')
+    .select(PUBLIC_BOOK_WITH_CONTENT_SELECT)
+    .eq('id', id)
+    .eq('status', 'published')
+    .eq('visibility', 'public')
+    .single();
+
+  if (!data) return null;
+
+  const book = data as Record<string, unknown>;
+  const row = pickAudioContentRow(book);
+  if (!row) return null;
+
+  const { parseChapters } = await import('@/components/audio/parse-chapters');
+  const chapters = parseChapters(row.toc);
+  const author = (book.author as AudiobookDetail['author']) ?? null;
+
+  return {
+    id: String(book.id),
+    title: String(book.title ?? ''),
+    description: (book.description as string | null | undefined) ?? null,
+    cover_url: (book.cover_url as string | null | undefined) ?? null,
+    author,
+    audioUrl: row.audio_url as string,
+    chapters,
+    narrator: pickNarrator(row, book),
+    durationSec: pickDurationSec(row, chapters),
+    content: row,
+  };
+}
+
 export async function createBookForApi(input: {
   title: string;
   author_id: string;

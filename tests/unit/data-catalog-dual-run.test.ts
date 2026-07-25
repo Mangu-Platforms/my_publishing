@@ -474,3 +474,75 @@ describe('fetchPublishedBookForCheckout dual-run', () => {
     expect(book?.author?.pen_name).toBe('Mongo Author');
   });
 });
+
+describe('listAudiobooks / fetchAudiobookById dual-run', () => {
+  afterEach(() => {
+    mockIsMongoPrimary.mockReset();
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockMaybeSingle.mockReset();
+    mockListResult.mockReset();
+    mockListResult.mockResolvedValue({ data: [], error: null });
+    jest.resetModules();
+  });
+
+  it('mongo returns empty catalog (no audio fields on Book yet)', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    const { listAudiobooks } = await import('@/lib/data/books');
+    await expect(listAudiobooks()).resolves.toEqual([]);
+  });
+
+  it('mongo returns null for detail (no audio fields on Book yet)', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    const { fetchAudiobookById } = await import('@/lib/data/books');
+    await expect(fetchAudiobookById('any')).resolves.toBeNull();
+  });
+
+  it('supabase lists books with audio_url on book_content', async () => {
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockListResult.mockResolvedValue({
+      data: [
+        {
+          id: 'a1',
+          title: 'Audio Title',
+          cover_url: '/c.jpg',
+          author: { pen_name: 'Narrator Auth', profile: { full_name: 'Narrator Auth' } },
+          content: [
+            { audio_url: 'https://cdn.example/a.mp3', narrator: 'Alex', audio_duration: 120 },
+          ],
+        },
+      ],
+      error: null,
+    });
+
+    const { listAudiobooks } = await import('@/lib/data/books');
+    const books = await listAudiobooks();
+    expect(books).toHaveLength(1);
+    expect(books[0]).toMatchObject({
+      id: 'a1',
+      title: 'Audio Title',
+      audioUrl: 'https://cdn.example/a.mp3',
+      narrator: 'Alex',
+      durationSec: 120,
+    });
+  });
+
+  it('supabase detail requires audio_url', async () => {
+    mockIsMongoPrimary.mockReturnValue(false);
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: 'a1',
+        title: 'Audio Title',
+        description: 'Listen',
+        cover_url: null,
+        author: { pen_name: 'Pat', profile: { full_name: 'Pat Lee' } },
+        content: { audio_url: 'https://cdn.example/a.mp3' },
+      },
+      error: null,
+    });
+
+    const { fetchAudiobookById } = await import('@/lib/data/books');
+    const detail = await fetchAudiobookById('a1');
+    expect(detail?.audioUrl).toBe('https://cdn.example/a.mp3');
+    expect(detail?.title).toBe('Audio Title');
+  });
+});
