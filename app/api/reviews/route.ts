@@ -68,7 +68,12 @@ export async function GET(request: NextRequest) {
   const { bookId, sort, page = 1, limit = 10 } = parsed.data;
 
   try {
-    const data = await listPublicReviewsPage({ bookId, sort, page, limit });
+    const data = await listPublicReviewsPage({
+      bookId,
+      sort: sort ?? 'helpful',
+      page,
+      limit,
+    });
 
     // Current user's votes on this page (best-effort, anonymous-safe).
     // review_votes is Supabase-shaped — skip when Mongo is primary.

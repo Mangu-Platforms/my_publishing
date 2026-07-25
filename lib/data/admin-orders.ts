@@ -112,14 +112,26 @@ export async function listAdminOrders(opts?: { limit?: number }): Promise<ListAd
     return { orders: [], error: { message: error.message } };
   }
 
-  const orders: AdminOrderListItem[] = ((data as AdminOrderListItem[] | null) || []).map((row) => ({
-    id: String(row.id),
-    order_number: String(row.order_number ?? row.id),
-    total_amount: row.total_amount ?? null,
-    status: String(row.status ?? 'pending'),
-    created_at: String(row.created_at ?? ''),
-    user: row.user ? { email: row.user.email ?? null } : null,
-  }));
+  const orders: AdminOrderListItem[] = (
+    (data as unknown as Array<{
+      id: string;
+      order_number: string;
+      total_amount: number | null;
+      status: string;
+      created_at: string;
+      user: { email: string | null } | { email: string | null }[] | null;
+    }> | null) || []
+  ).map((row) => {
+    const user = Array.isArray(row.user) ? (row.user[0] ?? null) : row.user;
+    return {
+      id: String(row.id),
+      order_number: String(row.order_number ?? row.id),
+      total_amount: row.total_amount ?? null,
+      status: String(row.status ?? 'pending'),
+      created_at: String(row.created_at ?? ''),
+      user: user ? { email: user.email ?? null } : null,
+    };
+  });
 
   return { orders, error: null };
 }

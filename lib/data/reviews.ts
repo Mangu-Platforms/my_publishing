@@ -621,7 +621,8 @@ export type MyReviewRow = {
   book_id: string;
   user_id: string;
   rating: number;
-  title: string | null;
+  /** undefined (not null) so ReviewCard props stay happy */
+  title?: string;
   content: string;
   is_spoiler: boolean;
   is_public: boolean;
@@ -716,7 +717,7 @@ async function listMyReviewsMongo(authUserId: string): Promise<MyReviewsResult> 
       book_id: bookId,
       user_id: String(row.user_id),
       rating: Number(row.rating ?? 0),
-      title: (row.title as string | null | undefined) ?? null,
+      title: (row.title as string | null | undefined) ?? undefined,
       content: String(row.content ?? ''),
       is_spoiler: Boolean(row.is_spoiler ?? false),
       // Missing is_public ⇒ published (parity with public list / transform).
@@ -777,7 +778,7 @@ async function listMyReviewsSupabase(authUserId: string): Promise<MyReviewsResul
     book_id: String(row.book_id),
     user_id: String(row.user_id),
     rating: Number(row.rating ?? 0),
-    title: (row.title as string | null | undefined) ?? null,
+    title: (row.title as string | null | undefined) ?? undefined,
     content: String(row.content ?? ''),
     is_spoiler: Boolean(row.is_spoiler ?? false),
     is_public:

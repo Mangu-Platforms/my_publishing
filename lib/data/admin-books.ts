@@ -136,13 +136,24 @@ export async function listAdminBooks(opts: {
     };
   }
 
-  const books: AdminBookListItem[] = ((data as AdminBookListItem[] | null) || []).map((row) => ({
-    id: String(row.id),
-    title: row.title,
-    status: row.status,
-    price: row.price ?? null,
-    author: row.author ? { pen_name: row.author.pen_name ?? null } : null,
-  }));
+  const books: AdminBookListItem[] = (
+    (data as unknown as Array<{
+      id: string;
+      title: string;
+      status: string;
+      price: number | null;
+      author: { pen_name: string | null } | { pen_name: string | null }[] | null;
+    }> | null) || []
+  ).map((row) => {
+    const author = Array.isArray(row.author) ? (row.author[0] ?? null) : row.author;
+    return {
+      id: String(row.id),
+      title: row.title,
+      status: row.status,
+      price: row.price ?? null,
+      author: author ? { pen_name: author.pen_name ?? null } : null,
+    };
+  });
 
   return {
     books,
