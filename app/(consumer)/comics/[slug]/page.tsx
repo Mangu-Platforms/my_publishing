@@ -7,7 +7,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 export async function generateMetadata({
-  params,
+  params: _params,
 }: {
   params: { slug: string };
 }): Promise<Metadata> {
@@ -21,7 +21,7 @@ export async function generateMetadata({
   return { title: `Comic — MANGU` };
 }
 
-export default async function ComicDetailPage({ params }: { params: { slug: string } }) {
+export default async function ComicDetailPage({ params: _params }: { params: { slug: string } }) {
   if (!FEATURE_COMICS) {
     // Flag-off contract: honest unavailable, not 404 or broken page.
     return (

@@ -20,12 +20,13 @@ export interface BookCardBook {
   average_rating?: number;
   avg_rating?: number;
   is_featured?: boolean;
+  /** Routes list items to /books, /comics or /papers. Present on both book shapes. */
+  content_type?: string | null;
   author?: {
     pen_name?: string | null;
     full_name?: string | null;
     profile?: { full_name?: string | null } | null;
   } | null;
-  [key: string]: unknown;
 }
 
 interface BookCardProps {

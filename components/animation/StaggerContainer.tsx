@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, ReactNode } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 
 interface StaggerContainerProps {
   children: ReactNode;
@@ -16,7 +16,7 @@ const containerVariants = {
   }),
 };
 
-export const itemVariants = {
+export const itemVariants: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1] } },
 };
