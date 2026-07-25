@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mangu-publishers": {
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_API_KEY}"
+      }
+    }
+  }
+}
