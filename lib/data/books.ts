@@ -480,6 +480,10 @@ export async function fetchBookForApi(idOrSlug: {
 
   // Public catalog client joins author under RLS-safe columns (PDP needs pen_name).
   // SECURITY: this is a public read path — only ever expose published+public books.
+  // NOTE: .limit(1) + first-row take, NOT .maybeSingle() — duplicate slugs exist
+  // in seeded data (the same QA book under two test authors) and maybeSingle()
+  // errors on multiple rows, which 404'd every book page. Prefer the most
+  // recently published match deterministically.
   const { createPublicCatalogClient, PUBLIC_BOOK_SELECT } =
     await import('@/lib/supabase/public-queries');
   const supabase = createPublicCatalogClient();
@@ -490,8 +494,9 @@ export async function fetchBookForApi(idOrSlug: {
     .eq('visibility', 'public');
   if (idOrSlug.id) query = query.eq('id', idOrSlug.id);
   else if (idOrSlug.slug) query = query.eq('slug', idOrSlug.slug);
-  const { data, error } = await query.maybeSingle();
-  if (!error && data) return data as ApiBook;
+  const { data, error } = await query.order('published_at', { ascending: false }).limit(1);
+  const primaryRow = (data?.[0] as ApiBook | undefined) ?? null;
+  if (!error && primaryRow) return primaryRow;
 
   // Resilience fallback: the admin (service-role) client is the only consumer
   // path that depends on SUPABASE_SERVICE_ROLE_KEY. If it errors or finds
@@ -508,12 +513,14 @@ export async function fetchBookForApi(idOrSlug: {
       .eq('visibility', 'public');
     if (idOrSlug.id) fallback = fallback.eq('id', idOrSlug.id);
     else fallback = fallback.eq('slug', idOrSlug.slug as string);
-    const { data: fallbackData, error: fallbackError } = await fallback.maybeSingle();
+    const { data: fallbackData, error: fallbackError } = await fallback
+      .order('published_at', { ascending: false })
+      .limit(1);
     if (fallbackError) {
       if (error) throw new Error(error.message);
       return null;
     }
-    return (fallbackData as ApiBook | null) ?? null;
+    return (fallbackData?.[0] as ApiBook | undefined) ?? null;
   } catch (fallbackThrow) {
     if (error) throw new Error(error.message);
     throw fallbackThrow;
@@ -578,8 +585,9 @@ export async function fetchPublishedBookForCheckout(idOrSlug: {
   if (idOrSlug.id) query = query.eq('id', idOrSlug.id);
   else if (idOrSlug.slug) query = query.eq('slug', idOrSlug.slug);
 
-  const { data } = await query.maybeSingle();
-  return (data as CheckoutBookSummary | null) ?? null;
+  // Same duplicate-slug hardening as fetchBookForApi.
+  const { data } = await query.order('published_at', { ascending: false }).limit(1);
+  return (data?.[0] as CheckoutBookSummary | undefined) ?? null;
 }
 
 // ---------------------------------------------------------------------------
