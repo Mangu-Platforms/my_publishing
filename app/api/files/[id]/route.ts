@@ -7,6 +7,9 @@
  * before streaming the manuscript. Never exposes the raw Blob/Supabase URL to
  * the client.
  *
+ * Source of the file: MongoDB `books.manuscript_url`, or Supabase
+ * `book_content.epub_url` (falling back to `pdf_url`).
+ *
  * Auth: dual-run (Supabase session or Better Auth session).
  * Data: dual-run (Supabase or MongoDB).
  */
@@ -39,28 +42,48 @@ async function getSessionUserId(request: Request): Promise<string | null> {
   }
 }
 
-async function getBookManuscriptUrl(
-  bookId: string
-): Promise<{ manuscript_url: string | null; author_id: string } | null> {
+type BookFile = { url: string | null; extension: string; author_id: string };
+
+async function getBookFile(bookId: string): Promise<BookFile | null> {
   if (isMongoPrimary()) {
     const { getBookById } = await import('@/lib/mongo-queries');
     const book = await getBookById(bookId);
     if (!book) return null;
+    // `manuscript_url` IS a real field on the Mongo book document.
     return {
-      manuscript_url: book.manuscript_url ?? null,
+      url: book.manuscript_url ?? null,
+      extension: 'epub',
       author_id: String(book.author_id),
     };
   }
 
   const { createClient } = await import('@/lib/supabase/admin');
   const admin = createClient();
-  const { data } = await admin
+  const { data: book } = await admin
     .from('books')
-    .select('manuscript_url, author_id')
+    .select('author_id')
     .eq('id', bookId)
     .maybeSingle();
-  if (!data) return null;
-  return { manuscript_url: data.manuscript_url ?? null, author_id: data.author_id };
+  if (!book) return null;
+
+  // Task 1.2 drift: `books.manuscript_url` exists in NO migration. PostgREST
+  // rejects the whole SELECT when one column is unknown, so this endpoint 404'd
+  // for every book. The readable file lives on `book_content`
+  // (migration 20260116000000_initial_schema): EPUB first, PDF as fallback.
+  const { data: content } = await admin
+    .from('book_content')
+    .select('epub_url, pdf_url')
+    .eq('book_id', bookId)
+    .limit(1)
+    .maybeSingle();
+
+  const epubUrl = content?.epub_url ?? null;
+  const pdfUrl = content?.pdf_url ?? null;
+  return {
+    url: epubUrl ?? pdfUrl,
+    extension: epubUrl ? 'epub' : 'pdf',
+    author_id: book.author_id,
+  };
 }
 
 async function userHasPurchased(userId: string, bookId: string): Promise<boolean> {
@@ -115,11 +138,11 @@ export async function GET(
   }
 
   // 2. Fetch book
-  const book = await getBookManuscriptUrl(bookId);
+  const book = await getBookFile(bookId);
   if (!book) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  if (!book.manuscript_url) {
+  if (!book.url) {
     return NextResponse.json({ error: 'No manuscript available' }, { status: 404 });
   }
 
@@ -135,7 +158,7 @@ export async function GET(
 
   // 4. Stream file — never redirect to the raw URL
   try {
-    const upstream = await fetch(book.manuscript_url);
+    const upstream = await fetch(book.url);
     if (!upstream.ok) {
       return NextResponse.json({ error: 'File unavailable' }, { status: 502 });
     }
@@ -145,7 +168,7 @@ export async function GET(
 
     const headers: Record<string, string> = {
       'Content-Type': contentType,
-      'Content-Disposition': `attachment; filename="manuscript-${bookId}.epub"`,
+      'Content-Disposition': `attachment; filename="manuscript-${bookId}.${book.extension}"`,
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     };
