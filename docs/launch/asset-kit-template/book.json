@@ -1,0 +1,139 @@
+// ============================================================================
+// EXAMPLE ASSET KIT — every value below is invented.
+// "The Lantern of Quiet Harbours" is not a real book and "A. N. Example" is not
+// a real author. Copy this folder, then replace ALL of it. Nothing in here may
+// ever reach the live catalog.
+//
+// Comments (// and /* */) are stripped before parsing, so keep them while you
+// work. Trailing commas are NOT tolerated — that is a real JSON error.
+//
+// Full field reference: docs/launch/ASSET_KIT_SPEC.md
+// Check your work:      npx tsx scripts/validate-asset-kit.ts <this-folder>
+// ============================================================================
+{
+  // Bump only if the spec changes shape. Informational.
+  "kit_format_version": 1,
+
+  // REQUIRED. Max 200 characters. Appears as the PDP <h1> and the browser tab.
+  // No series numbering, no subtitle — there is no `books.subtitle` column.
+  "title": "The Lantern of Quiet Harbours",
+
+  // OPTIONAL. Leave "" and the slug is derived from the title. If you set it:
+  // lowercase, digits, single hyphens, max 120. It becomes /books/<slug> and it
+  // is UNIQUE across the whole catalog, so it can never be changed quietly.
+  "slug": "",
+
+  "author": {
+    // REQUIRED. The name printed on the cover.
+    "pen_name": "A. N. Example",
+    // OPTIONAL. Legal/contracting name, for the rights record only. Not public.
+    "legal_name": "Example Author Ltd",
+    // OPERATOR FILLS THIS IN. The id of the row in /admin/authors. Leave "" —
+    // the publisher cannot know it. Empty is a warning by default and a blocker
+    // under --require-author-id (the pre-publish pass).
+    "admin_author_id": ""
+  },
+
+  // REQUIRED. One primary genre, exactly as it should appear on the PDP.
+  "genre": "Literary Fiction",
+
+  // REQUIRED. One of: book, comic, paper.
+  "content_type": "book",
+
+  // REQUIRED. Max 5000 characters. The full sales copy on the product page.
+  // Final copy only — no "TK", no "[insert quote]", no draft notes.
+  "description": "Ilse Marren keeps the last working lantern on a coastline the mapmakers have already given up on. When a winter storm strands a cargo crew in her harbour, she discovers that the light she has tended for thirty years has been guiding something else entirely. A quiet novel about obligation, weather, and the people who stay.",
+
+  // RECOMMENDED. ~200 characters. Used for cards and share previews.
+  "short_description": "A lighthouse keeper on a forgotten coast learns what her light has really been guiding. A quiet novel about obligation, weather, and the people who stay.",
+
+  // REQUIRED. Quoted STRING, plain decimal, max 2 places, no currency symbol.
+  // A bare JSON number is a floating-point double and export tooling can round
+  // it wrong; the string is parsed straight to integer cents.
+  "price": "12.99",
+
+  // REQUIRED and must be "USD" — there is no per-book currency column.
+  "currency": "USD",
+
+  // OPTIONAL but strongly recommended. ISBN-10 or ISBN-13, hyphens welcome.
+  // The check digit is verified, so a transposed digit is caught here.
+  // (9780000000002 is a syntactically valid placeholder, NOT a real ISBN.)
+  "isbn": "978-0-00-000000-2",
+
+  // RECOMMENDED. yyyy-mm-dd. The publication date shown on the PDP.
+  "published_at": "2026-09-15",
+
+  // OPTIONAL. Whole numbers.
+  "page_count": 312,
+  "word_count": 88000,
+
+  // OPTIONAL. Numeric Vimeo id only — not the full URL. "" if there is no
+  // trailer. Absent is a warning, never a blocker.
+  "trailer_vimeo_id": "",
+
+  // Retailer storefronts. Every one is optional individually, but shipping a
+  // book with none of them hides the "Also available at" section entirely, so
+  // that is a warning. Each must be a full https:// URL, and each must be
+  // OPENED AND CONFIRMED to land on this exact edition before you submit.
+  "retailers": {
+    "amazon_url": "https://www.amazon.com/dp/EXAMPLE-REPLACE-ME",
+    "kindle_url": "https://www.amazon.com/dp/EXAMPLE-REPLACE-ME-KINDLE",
+    "apple_books_url": "https://books.apple.com/us/book/example-replace-me",
+    "google_play_books_url": "https://play.google.com/store/books/details?id=EXAMPLE",
+    "barnes_noble_url": "https://www.barnesandnoble.com/w/example-replace-me",
+    "audible_url": "https://www.audible.com/pd/EXAMPLE-REPLACE-ME"
+  },
+
+  "assets": {
+    // REQUIRED (cover_file OR cover_url). Filename relative to THIS folder.
+    // JPG or PNG, portrait 2:3, at least 1600x2400, 5 MB or under.
+    "cover_file": "cover.jpg",
+    // Set instead of cover_file only if the cover is already hosted by us.
+    "cover_url": "",
+
+    // OPTIONAL at launch. .epub only, 50 MB or under. There is no on-site
+    // reader, so this is an internal archive asset, not a customer download.
+    "epub_file": "book.epub",
+    "epub_url": "",
+
+    // Audio sample: URL ONLY. There is no audio storage bucket, so we cannot
+    // accept an audio file in the kit — host it and paste the https URL.
+    // Putting a filename in audio_sample_file is a BLOCKER, by design.
+    "audio_sample_url": "https://cdn.example.com/audio/example-sample.mp3",
+    "audio_sample_file": "",
+    "audio_narrator": "A. N. Example",
+    // Seconds. 120-300 (2-5 minutes) recommended; outside that is a warning.
+    "audio_duration_seconds": 180
+  },
+
+  "seo": {
+    // Max 60 characters. Blank falls back to the book title.
+    "title": "The Lantern of Quiet Harbours | Example",
+    // Max 160 characters. Blank falls back to the long description, which is
+    // far too long for a search snippet.
+    "description": "A lighthouse keeper on a forgotten coast learns what her light has really been guiding. A quiet novel about obligation and weather.",
+    // Describe the cover for a screen reader. Do not start with "Image of".
+    "cover_alt": "Book cover: a single lantern burning on a dark stone jetty above a grey winter sea."
+  },
+
+  "rights": {
+    // Must be true. You are confirming you hold the rights to publish and
+    // distribute this title in the territory below.
+    "confirmed": true,
+    "holder": "Example Author Ltd",
+    "territory": "World, all languages",
+    "notes": ""
+  },
+
+  "approval": {
+    // Who signed this book off for publication.
+    "approved_by": "Publisher Name, MANGU Publishers",
+    "approved_on": "2026-07-20",
+    // Must be true: these are the FINAL files. No watermark, no draft label,
+    // no proof stamp, no placeholder copy, no "sample" overlay.
+    "final_files_confirmed": true,
+    // Must be true: every retailer URL above was opened in a browser and
+    // confirmed to land on THIS book. No offline tool can check this.
+    "retailer_links_opened": true
+  }
+}
