@@ -161,7 +161,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <div className="flex min-h-screen flex-col">
             <Header />
-            <main className="flex-1">{children}</main>
+            {/*
+              `id` is the skip link's target (Header.tsx: href="#main-content").
+              `tabIndex={-1}` makes this non-interactive landmark programmatically
+              focusable, so activating the link moves FOCUS here and not just the
+              scroll position — without it focus stays on <body> and the next Tab
+              lands back in the header. WCAG 2.4.1.
+            */}
+            <main id="main-content" tabIndex={-1} className="flex-1">
+              {children}
+            </main>
             <Footer newsletterEnabled={newsletterEnabled} />
           </div>
         </Providers>
