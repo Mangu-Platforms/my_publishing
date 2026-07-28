@@ -10,10 +10,15 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-white hover:bg-primary-hover',
+        // `bg-primary-strong`, not `bg-primary`: white on the brand red is
+        // 3.78:1 and the base class pins text-sm/500, so this is normal-size
+        // text needing 4.5:1 (A11Y-002). See --primary-strong in globals.css.
+        default: 'bg-primary-strong text-white hover:bg-primary-hover',
         destructive: 'bg-red-600 text-white hover:bg-red-700',
         outline: 'border border-border bg-transparent hover:bg-muted',
-        secondary: 'bg-secondary text-white hover:bg-secondary/80',
+        // White on the light-theme --secondary surface is 1.10:1; the paired
+        // foreground token is the legible one in both themes.
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-muted hover:text-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
