@@ -10,7 +10,13 @@ export const metadata: Metadata = {
     'Hosted book clubs are not available on MANGU yet. Browse the catalog meanwhile.',
 };
 
-/** Discover alias — same honest unavailable status as `/book-clubs` (E-001). */
+/**
+ * Discover alias — same honest unavailable status as `/book-clubs` (E-001).
+ *
+ * Task 4.6: this is a status page, not a placeholder page. The reader-facing
+ * copy no longer describes itself as a placeholder; it says what does not
+ * exist and sends people somewhere that works.
+ */
 export default function DiscoverBookClubsPage() {
   return (
     <Section>
@@ -23,8 +29,8 @@ export default function DiscoverBookClubsPage() {
         </p>
         <h1 className="mb-4 text-4xl font-bold">Book Clubs</h1>
         <p className="mb-8 max-w-2xl text-secondary">
-          Hosted clubs are not live on MANGU. This page is a placeholder, not a directory of
-          clubs you can join.
+          MANGU does not host book clubs. There is nothing to join or browse here, and no sign-up
+          list to add yourself to. If that changes, this page will say so.
         </p>
         <Button asChild variant="secondary">
           <Link href="/books">Browse catalog instead</Link>
