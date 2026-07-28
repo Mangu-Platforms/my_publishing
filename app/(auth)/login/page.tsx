@@ -1,7 +1,9 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { LoginForm } from './LoginForm';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { isBetterAuthPrimary } from '@/lib/auth/provider';
 
 export const metadata: Metadata = {
@@ -30,7 +32,15 @@ export default function LoginPage() {
             Legacy user? Check your inbox to set a new password.
           </div>
         ) : null}
-        <LoginForm />
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-8">
+              <LoadingSpinner />
+            </div>
+          }
+        >
+          <LoginForm />
+        </Suspense>
         <div className="mt-4 text-center text-sm">
           <Link href="/reset-password" className="text-primary hover:underline">
             Forgot password?
