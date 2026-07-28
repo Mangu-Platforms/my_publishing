@@ -42,13 +42,12 @@ jest.mock('next/cache', () => ({
 }));
 
 const mockSetBookAssets = jest.fn(async () => ({ ok: true }));
-jest.mock(
-  '@/lib/data/book-assets',
-  () => ({
-    setBookAssets: (...args: unknown[]) => mockSetBookAssets(...(args as [])),
-  }),
-  { virtual: true }
-);
+// NOT `{ virtual: true }`: @/lib/data/book-assets is a real module, and a
+// virtual mock is keyed to the declaring file, so lib/actions/books.ts would
+// import the real implementation and these assertions would see zero calls.
+jest.mock('@/lib/data/book-assets', () => ({
+  setBookAssets: (...args: unknown[]) => mockSetBookAssets(...(args as [])),
+}));
 
 // --------------------------------------------------------------------------
 // Recording Supabase client (both the session and the service-role client).
