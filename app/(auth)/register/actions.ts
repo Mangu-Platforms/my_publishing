@@ -5,7 +5,7 @@ import { betterAuthSignUp } from '@/lib/auth/better-auth-actions';
 import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
-import { authRateLimit, getAuthIdentifier } from '@/lib/utils/auth-rate-limit';
+import { authRateLimitCheck, getAuthIdentifier } from '@/lib/utils/auth-rate-limit';
 import { toFriendlyRegisterError } from '@/lib/auth/register-errors';
 import { sendWelcomeEmail } from '@/lib/email/messages';
 import { headers } from 'next/headers';
@@ -53,7 +53,17 @@ export async function registerUser(formData: FormData) {
   const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || null;
   const identifier = getAuthIdentifier(ip, normalizedEmail);
 
-  if (!(await authRateLimit(identifier))) {
+  const rate = await authRateLimitCheck(identifier);
+  if (!rate.success) {
+    if (rate.reason === 'unavailable') {
+      console.error(
+        '[auth] Rate limiter unavailable — registration blocked for ALL users. ' +
+          'Check UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN in this environment.'
+      );
+      return {
+        error: 'Registration is temporarily unavailable. Please try again in a few minutes.',
+      };
+    }
     return { error: 'Too many registration attempts. Please try again in 15 minutes.' };
   }
 
