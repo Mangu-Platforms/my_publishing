@@ -70,14 +70,34 @@ inconsistent state.
 | **Format** | JPG or PNG |
 | **Orientation** | Portrait, aspect ratio **2:3** |
 | **Minimum dimensions** | **1600 × 2400 px** |
-| **Maximum file size** | **2 MB** |
+| **Maximum file size (enforced)** | **5 MB** — uploads above this are rejected |
+| **Target file size (editorial)** | **≤ 2 MB** — house guideline, *not* enforced |
 | **Colour** | sRGB |
 | **Transparency** | None. Flatten PNGs onto a solid background. |
 
-**Technical ceiling vs editorial standard.** The `book-covers` bucket accepts up to **5 MB** and also
-permits `image/webp` and `image/gif` (`supabase/migrations/20260117000006_storage_policies.sql:3–5`).
-**Our standard is stricter: JPG/PNG, ≤ 2 MB.** The bucket will not stop you exceeding it; the
-signoff will.
+**Enforced ceiling vs editorial target.** The enforced maximum cover size is **5 MB**
+(5,242,880 bytes). Four checks across three files set it, and they all agree; nothing in the
+platform enforces a lower one:
+
+| Where | What it says |
+| --- | --- |
+| `supabase/migrations/20260117000006_storage_policies.sql:4` | `book-covers` bucket created with `file_size_limit = 5242880` |
+| `supabase/migrations/20260117000006_storage_policies.sql:25` | upload policy re-checks `(metadata->>'size')::BIGINT <= 5242880` |
+| `types/upload.ts:68` | `UPLOAD_CONFIGS.cover.maxSize = 5 * 1024 * 1024` |
+| `app/admin/books/_lib/book-validation.ts:53` | `COVER_RULES.maxBytes = 5 * 1024 * 1024`, applied by `validateCoverFile` |
+
+`validateCoverFile` is the admin publish gate, and the offline asset-kit validator
+(`scripts/lib/asset-kit.ts`) reuses it unchanged — so a cover that passes offline cannot be
+refused later, and vice versa.
+
+The bucket additionally permits `image/webp` and `image/gif`; the admin surface narrows to JPG/PNG
+because those are the only formats the retailers accept. Narrowing is safe — it is a subset of
+what Storage will take.
+
+**Editorial target: aim for ≤ 2 MB.** This is a house guideline for page weight, not a limit the
+platform applies. A 4 MB cover will upload, validate and publish without complaint; only the
+signoff below will query it. If 2 MB should become the real limit, it has to change in the four
+places above — do not restate it here as though it already has.
 
 **Quality checks**
 
@@ -428,7 +448,8 @@ METADATA
   Author resolves to real record     [ ]
 
 ASSETS
-  Cover: JPG/PNG, 2:3, >=1600x2400, <=2MB   [ ]
+  Cover: JPG/PNG, 2:3, >=1600x2400, <=5MB   [ ]  (5MB = enforced limit)
+  Cover <=2MB editorial target               [ ]  advisory, not enforced
   Cover legible at thumbnail                [ ]
   cover_url resolves over HTTPS             [ ]
   EPUB validated (internal only)            [ ]  N/A [ ]
