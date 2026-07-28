@@ -75,14 +75,14 @@ function flag(name: string): boolean {
 function option(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
   if (index >= 0 && index + 1 < process.argv.length) return process.argv[index + 1];
-  const inline = process.argv.find((arg) => arg.startsWith(`--${name}=`));
+  const inline = process.argv.find((arg: string) => arg.startsWith(`--${name}=`));
   return inline ? inline.slice(name.length + 3) : undefined;
 }
 
 function numberOption(name: string, fallback: number): number {
   const raw = option(name);
   const parsed = raw === undefined ? NaN : Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
 }
 
 if (flag('help')) {
@@ -116,17 +116,22 @@ if (!rawBaseUrl) {
   process.exit(2);
 }
 
-let ORIGIN: string;
-try {
-  ORIGIN = new URL(rawBaseUrl).origin;
-} catch {
-  console.error(`crawl-regression: --base-url is not a valid URL: ${rawBaseUrl}`);
-  process.exit(2);
-}
+/** Resolve once, up front: an unusable target is exit 2, never a silent pass. */
+const ORIGIN: string = (() => {
+  try {
+    return new URL(rawBaseUrl).origin;
+  } catch {
+    console.error(`crawl-regression: --base-url is not a valid URL: ${rawBaseUrl}`);
+    process.exit(2);
+    // process.exit is typed `never`, but an explicit throw keeps this file
+    // type-checking under strict definite-assignment analysis regardless.
+    throw new Error('unreachable');
+  }
+})();
 
-const CONCURRENCY = numberOption('concurrency', 4);
-const DELAY_MS = Number.isFinite(Number(option('delay'))) ? Number(option('delay')) : 250;
-const MAX_PAGES = numberOption('max-pages', 300);
+const CONCURRENCY = Math.max(1, numberOption('concurrency', 4));
+const DELAY_MS = numberOption('delay', 250);
+const MAX_PAGES = Math.max(1, numberOption('max-pages', 300));
 const OUT_FILE = option('out');
 const INCLUDE_DISALLOWED = flag('include-disallowed');
 const STRICT = flag('strict');
@@ -350,7 +355,10 @@ async function main(): Promise<number> {
     const normalized = normalizeInternal(url, ORIGIN);
     if (!normalized) return;
     const existing = seeds.get(normalized);
-    seeds.set(normalized, { url: normalized, isLaunchBook: isLaunchBook || !!existing?.isLaunchBook });
+    seeds.set(normalized, {
+      url: normalized,
+      isLaunchBook: isLaunchBook || !!existing?.isLaunchBook,
+    });
   };
 
   addSeed(`${ORIGIN}/`);
@@ -403,11 +411,10 @@ async function main(): Promise<number> {
         if (normalized) internalLinks.add(normalized);
       }
       for (const link of internalLinks) {
-        // Enqueue for crawling (budget-checked below) and verify it resolves.
-        if (!visited.has(link) && !queue.some((queued) => queued.url === link)) {
-          if (visited.size + queue.length < MAX_PAGES) {
-            queue.push({ url: link, isLaunchBook: launchBookPaths.has(new URL(link).pathname) });
-          }
+        // Enqueue for crawling (budget-checked) and verify the target resolves.
+        const alreadyQueued = queue.some((queued) => queued.url === link);
+        if (!visited.has(link) && !alreadyQueued && visited.size + queue.length < MAX_PAGES) {
+          queue.push({ url: link, isLaunchBook: launchBookPaths.has(new URL(link).pathname) });
         }
         if (isBrokenStatus(await checkTarget(link))) brokenLinks.push(link);
       }
@@ -436,11 +443,15 @@ async function main(): Promise<number> {
     );
   };
 
-  // Polite pool: bounded concurrency plus a per-request delay inside `request`
-  // callers, so a launch-day crawl never looks like an attack to the WAF.
+  // Polite pool: bounded concurrency plus a delay after every request, so a
+  // launch-day crawl never looks like an attack to the WAF.
   while (queue.length > 0 && visited.size < MAX_PAGES) {
     const batch: QueueEntry[] = [];
-    while (batch.length < CONCURRENCY && queue.length > 0 && visited.size + batch.length < MAX_PAGES) {
+    while (
+      batch.length < CONCURRENCY &&
+      queue.length > 0 &&
+      visited.size + batch.length < MAX_PAGES
+    ) {
       const next = queue.shift();
       if (!next) break;
       if (visited.has(next.url)) continue;
@@ -472,26 +483,21 @@ async function main(): Promise<number> {
         `P0: ${alternate} serves HTTP 200 instead of redirecting to ${ORIGIN} (split-brain canonical host)`
       );
     } else {
-      hostFindings.push(`P2: ${alternate} returned HTTP ${probe.status ?? 'n/a'} — confirm intended`);
+      hostFindings.push(
+        `P2: ${alternate} returned HTTP ${probe.status ?? 'n/a'} — confirm this is intended`
+      );
     }
   }
 
   // ── Report ────────────────────────────────────────────────────────────────
   rows.sort((a, b) => a.url.localeCompare(b.url));
 
+  const sitemapPaths = sitemapUrls.map((url) => new URL(url).pathname);
   const genrePaths = [
-    ...new Set(
-      sitemapUrls
-        .map((url) => new URL(url).pathname)
-        .filter((pathname) => classifyRoute(pathname) === 'genre')
-    ),
+    ...new Set(sitemapPaths.filter((pathname) => classifyRoute(pathname) === 'genre')),
   ].sort();
   const audioPaths = [
-    ...new Set(
-      sitemapUrls
-        .map((url) => new URL(url).pathname)
-        .filter((pathname) => classifyRoute(pathname) === 'audio-item')
-    ),
+    ...new Set(sitemapPaths.filter((pathname) => classifyRoute(pathname) === 'audio-item')),
   ].sort();
 
   const severities: Severity[] = rows.map((row) => row.severity);
@@ -512,7 +518,7 @@ async function main(): Promise<number> {
   };
 
   const report = [
-    `# Full-crawl regression report`,
+    '# Full-crawl regression report',
     '',
     `- Target: \`${ORIGIN}\``,
     `- Crawled at: ${new Date().toISOString()}`,
