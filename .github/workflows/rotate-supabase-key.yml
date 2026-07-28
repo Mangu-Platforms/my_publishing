@@ -1,6 +1,14 @@
 name: Rotate Supabase Anon Key
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SCOPE: this workflow rotates the **anon / publishable** key ONLY.
+#
+# It does NOT rotate SUPABASE_SERVICE_ROLE_KEY. Disabling "legacy JWT keys" in
+# the Supabase dashboard also disables the legacy service_role JWT, and nothing
+# here re-provisions it — server-side catalog reads, admin operations and
+# /api/health would break. Rotating the service-role key is a MANUAL, human-
+# gated procedure: see docs/operations/ENVIRONMENT_MATRIX.md §3.
+#
 # ONE-STOP rotation: push new key → GitHub Secrets → both Vercel projects
 #
 # Trigger: manual only (workflow_dispatch).
@@ -23,6 +31,14 @@ on:
         type: string
       new_supabase_url:
         description: 'NEXT_PUBLIC_SUPABASE_URL (leave blank to keep existing)'
+        required: false
+        type: string
+        default: ''
+      supabase_project_ref:
+        description: >-
+          CURRENT Supabase project ref, used only to build the dashboard link in
+          the summary. Leave blank to derive it from new_supabase_url. Never
+          hardcoded in this file — an old ref may no longer resolve (NXDOMAIN).
         required: false
         type: string
         default: ''
@@ -147,16 +163,53 @@ jobs:
           [[ -n "${NEW_URL}" ]] && upsert_vercel_env "NEXT_PUBLIC_SUPABASE_URL" "${NEW_URL}"
 
       - name: Summary
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          PROJECT_REF_INPUT: ${{ github.event.inputs.supabase_project_ref }}
+          NEW_URL: ${{ github.event.inputs.new_supabase_url }}
         run: |
-          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+          # Resolve the project ref WITHOUT hardcoding one: explicit input wins,
+          # otherwise derive it from the supplied project URL. If neither is
+          # available, fall back to Supabase's own "choose a project" path (_).
+          REF="${PROJECT_REF_INPUT}"
+          if [[ -z "${REF}" && -n "${NEW_URL}" ]]; then
+            REF="$(printf '%s' "${NEW_URL}" \
+              | sed -E 's#^https?://##; s#/.*$##; s#\.supabase\.(co|in)$##')"
+          fi
+          if [[ -z "${REF}" ]]; then
+            REF="_"
+            echo "::warning::No project ref supplied or derivable — the summary links to the Supabase project picker."
+          fi
+          DASHBOARD="https://supabase.com/dashboard/project/${REF}/settings/api"
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
             echo "### 🔍 Dry run complete — no changes made" >> $GITHUB_STEP_SUMMARY
           else
-            echo "### ✅ Key rotated in GitHub Secrets + both Vercel projects" >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ ANON key rotated in GitHub Secrets + both Vercel projects" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Both Vercel projects will redeploy automatically." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> ### ⛔ READ BEFORE DISABLING ANY KEY" >> $GITHUB_STEP_SUMMARY
+          echo "> This workflow rotated the **anon** key only." >> $GITHUB_STEP_SUMMARY
+          echo "> Disabling **all** legacy JWT keys in the dashboard ALSO disables the legacy" >> $GITHUB_STEP_SUMMARY
+          echo "> \`service_role\` JWT. Nothing here re-provisions it, so server-side catalog" >> $GITHUB_STEP_SUMMARY
+          echo "> reads, admin operations and \`/api/health\` would start failing while the" >> $GITHUB_STEP_SUMMARY
+          echo "> anon key still looks healthy." >> $GITHUB_STEP_SUMMARY
+          echo ">" >> $GITHUB_STEP_SUMMARY
+          echo "> Rotate \`SUPABASE_SERVICE_ROLE_KEY\` MANUALLY first — the exact steps are in" >> $GITHUB_STEP_SUMMARY
+          echo "> \`docs/operations/ENVIRONMENT_MATRIX.md\` §3 — and verify readiness BEFORE" >> $GITHUB_STEP_SUMMARY
+          echo "> disabling anything." >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${DRY_RUN}" != "true" ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Required manual step — disable the OLD key:**" >> $GITHUB_STEP_SUMMARY
-            echo "1. Go to https://supabase.com/dashboard/project/tkzvikozrcynhwsqtkqp/settings/api" >> $GITHUB_STEP_SUMMARY
+            echo "**Manual step — disable the OLD anon key (only after the service-role check above):**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Open ${DASHBOARD}" >> $GITHUB_STEP_SUMMARY
             echo "2. Under **API Keys** → find the legacy \`anon\` JWT → click **Disable**" >> $GITHUB_STEP_SUMMARY
-            echo "3. Verify: \`curl -I https://tkzvikozrcynhwsqtkqp.supabase.co/rest/v1/ -H \"apikey: <OLD_KEY>\"\` should return 401" >> $GITHUB_STEP_SUMMARY
+            echo "   (Do NOT use a bulk \"disable all legacy JWT keys\" action.)" >> $GITHUB_STEP_SUMMARY
+            echo "3. Verify the site is still ready:" >> $GITHUB_STEP_SUMMARY
+            echo "   \`curl -fsS https://www.mangu-publishers.com/api/health?ready=1 | jq '.ready'\` → \`true\`" >> $GITHUB_STEP_SUMMARY
+            echo "4. Verify the old key is rejected (run locally; never paste the key into CI):" >> $GITHUB_STEP_SUMMARY
+            echo "   \`curl -I \"https://${REF}.supabase.co/rest/v1/\" -H \"apikey: <OLD_KEY>\"\` → 401" >> $GITHUB_STEP_SUMMARY
           fi
