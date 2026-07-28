@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { betterAuthSignIn } from '@/lib/auth/better-auth-actions';
 import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { createClient } from '@/lib/supabase/server';
-import { authRateLimit, getAuthIdentifier } from '@/lib/utils/auth-rate-limit';
+import { authRateLimitCheck, getAuthIdentifier } from '@/lib/utils/auth-rate-limit';
 import { headers } from 'next/headers';
 
 export async function signIn(formData: FormData) {
@@ -16,7 +16,17 @@ export async function signIn(formData: FormData) {
   const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || null;
   const identifier = getAuthIdentifier(ip, email);
 
-  if (!(await authRateLimit(identifier))) {
+  const rate = await authRateLimitCheck(identifier);
+  if (!rate.success) {
+    if (rate.reason === 'unavailable') {
+      console.error(
+        '[auth] Rate limiter unavailable — sign-in blocked for ALL users. ' +
+          'Check UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN in this environment.'
+      );
+      return {
+        error: 'Sign-in is temporarily unavailable. Please try again in a few minutes.',
+      };
+    }
     return { error: 'Too many login attempts. Please try again in 15 minutes.' };
   }
 
