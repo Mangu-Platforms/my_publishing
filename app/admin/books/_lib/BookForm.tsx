@@ -67,11 +67,16 @@ const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
 /**
  * Payload shapes sent to the shared server actions.
  *
- * Declared as named types (not inline object literals) on purpose: the actions
- * are being made provider-aware by a parallel change, and a `const` of a wider
- * type stays assignable to a narrower parameter instead of tripping TypeScript's
- * excess-property check on a literal. Fields the action does not accept yet are
- * simply ignored rather than breaking the admin surface.
+ * These are named types rather than inline object literals, which means
+ * TypeScript's excess-property check does NOT run on them: a key the action's
+ * parameter type does not declare compiles fine and is then dropped on the way
+ * to the database. So this payload and the `AdminBookInput` type in
+ * `lib/actions/books.ts` have to be kept in step by hand — every key below is
+ * accepted and persisted by both providers.
+ *
+ * `published_at` is NOT here. It is stamped by the write path on the first
+ * transition to published and never restamped or cleared, so the form shows it
+ * read-only instead of posting a value that would be discarded.
  */
 type BookWritePayload = {
   title: string;
@@ -85,7 +90,6 @@ type BookWritePayload = {
   isbn: string;
   content_type: ContentType;
   is_featured: boolean;
-  published_at: string | null;
   page_count: number | undefined;
   word_count: number | undefined;
   trailer_vimeo_id: string | null;
@@ -197,7 +201,6 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
       isbn: values.isbn.trim(),
       content_type: values.content_type,
       is_featured: values.is_featured,
-      published_at: values.published_at.trim() === '' ? null : values.published_at,
       page_count: optionalInt(values.page_count),
       word_count: optionalInt(values.word_count),
       trailer_vimeo_id: nullableText(values.trailer_vimeo_id),
@@ -443,9 +446,13 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
               name="published_at"
               type="date"
               value={values.published_at}
-              onChange={(event) => setField('published_at', event.target.value)}
+              readOnly
               className="mt-1"
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Set automatically the first time this book is published, and kept if you unpublish
+              it.
+            </p>
             <FieldError message={visibleErrors.published_at} />
           </div>
           <div>
