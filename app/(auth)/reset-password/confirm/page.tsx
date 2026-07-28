@@ -9,9 +9,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { normalizeAuthErrorMessage } from '@/lib/auth/error-messages';
+import {
+  PASSWORD_HELP_TEXT,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_MIN_MESSAGE_LONG,
+} from '@/lib/auth/password-policy';
 
 function toFriendlyResetError(error: unknown) {
-  const message = error instanceof Error ? error.message : 'We could not verify this reset link.';
+  const message = normalizeAuthErrorMessage(error, 'We could not verify this reset link.');
 
   if (/expired|otp_expired|invalid|token/i.test(message)) {
     return 'This password reset link is invalid or has expired. Please request a new reset email.';
@@ -22,7 +28,7 @@ function toFriendlyResetError(error: unknown) {
   }
 
   if (/password/i.test(message) && /weak|short|least/i.test(message)) {
-    return 'Password must be at least 6 characters long.';
+    return PASSWORD_MIN_MESSAGE_LONG;
   }
 
   return message;
@@ -131,8 +137,8 @@ function ResetPasswordConfirmContent() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setError(PASSWORD_MIN_MESSAGE_LONG);
       return;
     }
 
@@ -187,10 +193,14 @@ function ResetPasswordConfirmContent() {
               id="password"
               type="password"
               autoComplete="new-password"
+              aria-describedby="password-help"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               disabled={isSubmitting}
             />
+            <p id="password-help" className="text-sm text-secondary">
+              {PASSWORD_HELP_TEXT}
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm new password</Label>
