@@ -1,26 +1,18 @@
-import { createClient } from '@/lib/supabase/admin';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { listAdminAuthors } from '@/lib/data/admin-books';
 import { BookCreateForm } from './BookCreateForm';
 
 export const dynamic = 'force-dynamic';
 
-async function getAuthors() {
-  // Admin client: the authors table has RLS enabled with no public SELECT
-  // policy; access to this page is already gated by the admin layout.
-  const supabase = createClient();
-  const { data } = await supabase
-    .from('authors')
-    .select('id, pen_name')
-    .order('pen_name', { ascending: true });
-  return data ?? [];
-}
-
 export default async function NewBookPage() {
-  const authors = await getAuthors();
+  // Provider-aware: this used to query Supabase directly through the
+  // service-role client, so under DATABASE_PROVIDER=mongodb the dropdown listed
+  // authors that do not exist in the primary store.
+  const authors = await listAdminAuthors();
 
   return (
     <Section>
@@ -36,10 +28,11 @@ export default async function NewBookPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Add New Book</h1>
           <p className="mt-2 text-muted-foreground">
-            Create a book record. You can edit details and retailer links after saving.
+            Fill in the metadata, upload the cover and files, then publish when the readiness
+            checklist is clear.
           </p>
         </div>
-        <div className="max-w-2xl">
+        <div className="max-w-3xl">
           <BookCreateForm authors={authors} />
         </div>
       </Container>
