@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -28,7 +28,7 @@ function toFriendlyResetError(error: unknown) {
   return message;
 }
 
-export default function ResetPasswordConfirmPage() {
+function ResetPasswordConfirmContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
@@ -163,6 +163,58 @@ export default function ResetPasswordConfirmPage() {
   };
 
   return (
+    <>
+      {status === 'loading' ? (
+        <div className="flex items-center justify-center py-8">
+          <LoadingSpinner />
+        </div>
+      ) : status === 'error' ? (
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-red-500">{error}</p>
+          <Button asChild className="w-full">
+            <Link href="/reset-password">Request a new link</Link>
+          </Button>
+        </div>
+      ) : isUpdated ? (
+        <div className="space-y-2 text-center">
+          <p className="text-sm text-green-600">Password updated! Redirecting to sign in...</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="password">New password</Label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              disabled={isSubmitting}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm new password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              disabled={isSubmitting}
+            />
+          </div>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <Button className="w-full" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingSpinner size="sm" /> : 'Update password'}
+          </Button>
+        </form>
+      )}
+    </>
+  );
+}
+
+export default function ResetPasswordConfirmPage() {
+  return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
         <Link href="/" className="mb-2 block text-3xl font-bold text-primary">
@@ -172,51 +224,15 @@ export default function ResetPasswordConfirmPage() {
         <CardDescription>Enter a new password for your account.</CardDescription>
       </CardHeader>
       <CardContent>
-        {status === 'loading' ? (
-          <div className="flex items-center justify-center py-8">
-            <LoadingSpinner />
-          </div>
-        ) : status === 'error' ? (
-          <div className="space-y-4 text-center">
-            <p className="text-sm text-red-500">{error}</p>
-            <Button asChild className="w-full">
-              <Link href="/reset-password">Request a new link</Link>
-            </Button>
-          </div>
-        ) : isUpdated ? (
-          <div className="space-y-2 text-center">
-            <p className="text-sm text-green-600">Password updated! Redirecting to sign in...</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">New password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                disabled={isSubmitting}
-              />
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-8">
+              <LoadingSpinner />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm new password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                disabled={isSubmitting}
-              />
-            </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
-            <Button className="w-full" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? <LoadingSpinner size="sm" /> : 'Update password'}
-            </Button>
-          </form>
-        )}
+          }
+        >
+          <ResetPasswordConfirmContent />
+        </Suspense>
       </CardContent>
     </Card>
   );
