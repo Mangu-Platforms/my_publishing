@@ -480,21 +480,91 @@ describe('listAudiobooks / fetchAudiobookById dual-run', () => {
     mockIsMongoPrimary.mockReset();
     mockIsMongoPrimary.mockReturnValue(false);
     mockMaybeSingle.mockReset();
+    mockGetBookById.mockReset();
+    mockAggregateToArray.mockReset();
     mockListResult.mockReset();
     mockListResult.mockResolvedValue({ data: [], error: null });
     jest.resetModules();
   });
 
-  it('mongo returns empty catalog (no audio fields on Book yet)', async () => {
+  // These two cases used to be named "mongo returns empty catalog / null for
+  // detail (no audio fields on Book yet)" and asserted that the Mongo branches
+  // were stubs. Both branches are now real implementations (Task 2.0b), so the
+  // cases assert what this file exists to prove: the Mongo branch reads Mongo
+  // and never falls through to the Supabase catalog client. Field-level parity
+  // is covered by tests/unit/mongo-catalog-field-parity.test.ts.
+  it('mongo lists audiobooks from Mongo, not from the Supabase catalog client', async () => {
     mockIsMongoPrimary.mockReturnValue(true);
+    mockAggregateToArray.mockResolvedValue([
+      {
+        _id: 'm-audio',
+        title: 'Mongo Sample',
+        cover_url: '/cover.jpg',
+        audio_url: 'https://cdn.example/sample.mp3',
+        audio_narrator: 'Alex',
+        audio_duration_seconds: 90,
+        author: { _id: 'a1', pen_name: 'Ada' },
+      },
+    ]);
+
     const { listAudiobooks } = await import('@/lib/data/books');
-    await expect(listAudiobooks()).resolves.toEqual([]);
+    const entries = await listAudiobooks();
+
+    expect(mockAggregateToArray).toHaveBeenCalled();
+    // The Supabase list chain is never awaited under the Mongo provider.
+    expect(mockListResult).not.toHaveBeenCalled();
+    expect(entries).toEqual([
+      {
+        id: 'm-audio',
+        title: 'Mongo Sample',
+        author: 'Ada',
+        coverUrl: '/cover.jpg',
+        audioUrl: 'https://cdn.example/sample.mp3',
+        narrator: 'Alex',
+        durationSec: 90,
+      },
+    ]);
   });
 
-  it('mongo returns null for detail (no audio fields on Book yet)', async () => {
+  it('mongo loads audiobook detail through the published+public gate', async () => {
     mockIsMongoPrimary.mockReturnValue(true);
+    mockGetBookById.mockResolvedValue({
+      _id: 'm-audio',
+      title: 'Mongo Sample',
+      description: 'Listen',
+      cover_url: null,
+      status: 'published',
+      visibility: 'public',
+      audio_url: 'https://cdn.example/sample.mp3',
+      audio_narrator: 'Alex',
+      audio_duration_seconds: 90,
+      author: { pen_name: 'Ada' },
+    });
+
     const { fetchAudiobookById } = await import('@/lib/data/books');
-    await expect(fetchAudiobookById('any')).resolves.toBeNull();
+    const detail = await fetchAudiobookById('m-audio');
+
+    expect(mockGetBookById).toHaveBeenCalledWith('m-audio', {
+      status: 'published',
+      visibility: 'public',
+    });
+    expect(detail?.audioUrl).toBe('https://cdn.example/sample.mp3');
+    expect(detail?.narrator).toBe('Alex');
+    expect(detail?.durationSec).toBe(90);
+    expect(mockMaybeSingle).not.toHaveBeenCalled();
+  });
+
+  it('mongo returns null for a book that carries no audio sample', async () => {
+    mockIsMongoPrimary.mockReturnValue(true);
+    mockGetBookById.mockResolvedValue({
+      _id: 'm-silent',
+      title: 'Quiet',
+      status: 'published',
+      visibility: 'public',
+    });
+
+    const { fetchAudiobookById } = await import('@/lib/data/books');
+    await expect(fetchAudiobookById('m-silent')).resolves.toBeNull();
   });
 
   it('supabase lists books with audio_url on book_content', async () => {
