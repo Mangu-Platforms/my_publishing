@@ -5,6 +5,7 @@ import { betterAuthSignIn } from '@/lib/auth/better-auth-actions';
 import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { createClient } from '@/lib/supabase/server';
 import { authRateLimitCheck, getAuthIdentifier } from '@/lib/utils/auth-rate-limit';
+import { normalizeAuthErrorMessage, redactAuthDiagnostic } from '@/lib/auth/error-messages';
 import { headers } from 'next/headers';
 
 export async function signIn(formData: FormData) {
@@ -41,9 +42,10 @@ export async function signIn(formData: FormData) {
     return { error: 'Please enter a valid email address' };
   }
 
-  if (password.length < 6) {
-    return { error: 'Password must be at least 6 characters long' };
-  }
+  // Task 1.9: sign-in intentionally applies NO password-length policy. The
+  // creation policy (8 chars, lib/auth/password-policy.ts) is enforced where a
+  // password is SET. Gating sign-in on length would lock out pre-existing
+  // 6-7 character credentials and leak the policy to an attacker.
 
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -60,17 +62,30 @@ export async function signIn(formData: FormData) {
     });
 
     if (error) {
+      // Diagnostics stay server-side and redacted (Task 1.8).
+      console.error('[auth] Supabase sign-in rejected:', redactAuthDiagnostic(error));
+
+      const raw = typeof error.message === 'string' ? error.message : '';
+
       // Provide user-friendly error messages
-      if (error.message.includes('Invalid login credentials')) {
+      if (raw.includes('Invalid login credentials')) {
         return { error: 'Invalid email or password. Please try again.' };
       }
-      if (error.message.includes('Email not confirmed')) {
+      if (raw.includes('Email not confirmed')) {
         return { error: 'Please verify your email address before signing in.' };
       }
-      if (error.message.includes('Too many requests')) {
+      if (raw.includes('Too many requests')) {
         return { error: 'Too many login attempts. Please try again later.' };
       }
-      return { error: error.message };
+
+      // Anything else is normalized: never surface `{}`, `[object Object]`,
+      // a stack trace or a provider internal to the sign-in form.
+      return {
+        error: normalizeAuthErrorMessage(
+          error,
+          'We could not sign you in right now. Please try again.'
+        ),
+      };
     }
 
     if (!data.user) {
@@ -80,7 +95,7 @@ export async function signIn(formData: FormData) {
     // Revalidate paths
     revalidatePath('/', 'layout');
   } catch (error) {
-    console.error('Unexpected error during sign in:', error);
+    console.error('[auth] Unexpected error during sign in:', redactAuthDiagnostic(error));
     return { error: 'An unexpected error occurred. Please try again.' };
   }
 
