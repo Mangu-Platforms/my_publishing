@@ -6,6 +6,7 @@
 import '@/lib/server-only-guard';
 
 import { isMongoPrimary } from '@/lib/db/provider';
+import { RETAILER_URL_FIELDS, type RetailerUrlField } from '@/lib/books/fields';
 
 export type AdminBookListItem = {
   id: string;
@@ -162,4 +163,188 @@ export async function listAdminBooks(opts: {
     perPage,
     error: null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Admin detail read + author picker (Task 2.3)
+//
+// Both admin pages used to import `@/lib/supabase/admin` directly, so under
+// DATABASE_PROVIDER=mongodb the edit page could not load a Mongo book at all
+// and the author dropdown listed Supabase authors that do not exist in the
+// primary store. They now go through this module, exactly like the list above.
+// ---------------------------------------------------------------------------
+
+export type AdminAuthorOption = { id: string; pen_name: string };
+
+export type AdminBookDetail = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  genre: string | null;
+  author_id: string | null;
+  author: { pen_name: string | null } | null;
+  price: number | null;
+  currency: string | null;
+  isbn: string | null;
+  content_type: 'book' | 'comic' | 'paper' | null;
+  status: string;
+  is_featured: boolean;
+  published_at: string | null;
+  page_count: number | null;
+  word_count: number | null;
+  trailer_vimeo_id: string | null;
+  cover_url: string | null;
+} & Record<RetailerUrlField, string | null>;
+
+/** Columns the edit form round-trips. NOTE: no `subtitle` — see lib/books/fields.ts. */
+const ADMIN_BOOK_DETAIL_COLUMNS = [
+  'id',
+  'title',
+  'slug',
+  'description',
+  'genre',
+  'author_id',
+  'price',
+  'isbn',
+  'content_type',
+  'status',
+  'is_featured',
+  'published_at',
+  'page_count',
+  'word_count',
+  'trailer_vimeo_id',
+  'cover_url',
+  ...RETAILER_URL_FIELDS,
+].join(', ');
+
+function toIsoDate(value: unknown): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+}
+
+function retailerUrlsFrom(row: Record<string, unknown>): Record<RetailerUrlField, string | null> {
+  const urls = {} as Record<RetailerUrlField, string | null>;
+  for (const field of RETAILER_URL_FIELDS) {
+    const value = row[field];
+    urls[field] = typeof value === 'string' && value.trim() !== '' ? value : null;
+  }
+  return urls;
+}
+
+/**
+ * Single book for the admin edit form.
+ *
+ * Deliberately NOT filtered on status or visibility: an admin must be able to
+ * open a draft (that is the whole point of the create -> edit -> publish loop).
+ */
+export async function getAdminBook(id: string): Promise<AdminBookDetail | null> {
+  const bookId = String(id ?? '').trim();
+  if (!bookId) return null;
+
+  if (isMongoPrimary()) {
+    try {
+      const { getAdminBookMongo } = await import('@/lib/mongo-books');
+      const book = (await getAdminBookMongo(bookId)) as Record<string, unknown> | null;
+      if (!book) return null;
+
+      const author = book.author as { pen_name?: string | null } | null | undefined;
+      const price = book.price;
+      return {
+        id: String(book._id ?? bookId),
+        title: String(book.title ?? ''),
+        slug: String(book.slug ?? ''),
+        description: (book.description as string | null | undefined) ?? null,
+        genre: (book.genre as string | null | undefined) ?? null,
+        author_id: book.author_id != null ? String(book.author_id) : null,
+        author: author ? { pen_name: author.pen_name ?? null } : null,
+        price: typeof price === 'number' ? price : null,
+        currency: (book.currency as string | null | undefined) ?? null,
+        isbn: (book.isbn as string | null | undefined) ?? null,
+        content_type: (book.content_type as AdminBookDetail['content_type']) ?? null,
+        status: String(book.status ?? 'draft'),
+        is_featured: Boolean(book.is_featured),
+        published_at: toIsoDate(book.published_at),
+        page_count: typeof book.page_count === 'number' ? book.page_count : null,
+        word_count: typeof book.word_count === 'number' ? book.word_count : null,
+        trailer_vimeo_id: (book.trailer_vimeo_id as string | null | undefined) ?? null,
+        cover_url: (book.cover_url as string | null | undefined) ?? null,
+        ...retailerUrlsFrom(book),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const { createClient } = await import('@/lib/supabase/admin');
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('books')
+    .select(`${ADMIN_BOOK_DETAIL_COLUMNS}, author:authors(pen_name)`)
+    .eq('id', bookId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const row = data as unknown as Record<string, unknown>;
+  const rawAuthor = row.author as
+    | { pen_name: string | null }
+    | { pen_name: string | null }[]
+    | null
+    | undefined;
+  const author = Array.isArray(rawAuthor) ? (rawAuthor[0] ?? null) : (rawAuthor ?? null);
+
+  return {
+    id: String(row.id),
+    title: String(row.title ?? ''),
+    slug: String(row.slug ?? ''),
+    description: (row.description as string | null | undefined) ?? null,
+    genre: (row.genre as string | null | undefined) ?? null,
+    author_id: row.author_id != null ? String(row.author_id) : null,
+    author: author ? { pen_name: author.pen_name ?? null } : null,
+    price: typeof row.price === 'number' ? row.price : null,
+    // No `books.currency` column exists on Supabase — see CURRENCY_IS_FIXED.
+    currency: null,
+    isbn: (row.isbn as string | null | undefined) ?? null,
+    content_type: (row.content_type as AdminBookDetail['content_type']) ?? null,
+    status: String(row.status ?? 'draft'),
+    is_featured: Boolean(row.is_featured),
+    published_at: toIsoDate(row.published_at),
+    page_count: typeof row.page_count === 'number' ? row.page_count : null,
+    word_count: typeof row.word_count === 'number' ? row.word_count : null,
+    trailer_vimeo_id: (row.trailer_vimeo_id as string | null | undefined) ?? null,
+    cover_url: (row.cover_url as string | null | undefined) ?? null,
+    ...retailerUrlsFrom(row),
+  };
+}
+
+/**
+ * Authors for the admin book form's dropdown, ordered by pen name.
+ *
+ * Supabase path keeps the service-role client: `authors` has RLS with no public
+ * SELECT policy, and access to /admin is already gated by the admin layout.
+ */
+export async function listAdminAuthors(): Promise<AdminAuthorOption[]> {
+  if (isMongoPrimary()) {
+    try {
+      const { listAdminAuthorsMongo } = await import('@/lib/mongo-books');
+      return await listAdminAuthorsMongo();
+    } catch {
+      return [];
+    }
+  }
+
+  const { createClient } = await import('@/lib/supabase/admin');
+  const supabase = createClient();
+  const { data } = await supabase
+    .from('authors')
+    .select('id, pen_name')
+    .order('pen_name', { ascending: true });
+
+  return ((data as Array<{ id: string; pen_name: string | null }> | null) ?? []).map((row) => ({
+    id: String(row.id),
+    pen_name: row.pen_name ?? 'Unnamed author',
+  }));
 }
