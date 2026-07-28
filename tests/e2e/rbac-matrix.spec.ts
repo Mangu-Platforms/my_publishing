@@ -27,7 +27,7 @@
  *   TEST_USER_PASSWORD  (shared fallback password for all four)
  */
 
-import { test, expect, type Browser, type Page } from '@playwright/test';
+import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -47,7 +47,12 @@ const ADMIN_PAGES = [
   '/admin/orders',
   '/admin/health',
 ];
-const AUTHOR_PAGES = ['/author/dashboard', '/author/projects', '/author/submit', '/author/analytics'];
+const AUTHOR_PAGES = [
+  '/author/dashboard',
+  '/author/projects',
+  '/author/submit',
+  '/author/analytics',
+];
 const PARTNER_PAGES = [
   '/partner/dashboard',
   '/partner/orders',
@@ -127,8 +132,8 @@ const hasRealAuthBackend = () =>
 // Middleware rate-limits auth POSTs (5 per 60s per IP), so logging in per test
 // would trip the limiter and produce failures that look like RBAC bugs. This
 // reuses the SAME gitignored `.auth/<role>.json` cache and lock protocol as
-// tests/e2e/role-gating.spec.ts on purpose: shared cache means the whole suite
-// performs at most one UI login per role per freshness window.
+// tests/e2e/role-gating.spec.ts on purpose: a shared cache means the whole
+// suite performs at most one UI login per role per freshness window.
 
 const AUTH_DIR = path.join(__dirname, '..', '..', '.auth');
 const STATE_MAX_AGE_MS = 45 * 60 * 1000; // Supabase access tokens live ~1h.
@@ -193,11 +198,10 @@ async function loginViaUi(page: Page, role: Role, credentials: Credentials): Pro
       .first()
       .textContent()
       .catch(() => null);
-    // Never echo the password; the email is already operator-supplied config.
-    throw new Error(
-      `Login failed for role "${role}".` + (alert ? ` Form error: ${alert.trim()}` : ''),
-      { cause: error }
-    );
+    // Never echo the credential material into the report.
+    throw new Error(`Login failed for role "${role}".` + (alert ? ` Form error: ${alert.trim()}` : ''), {
+      cause: error,
+    });
   }
 }
 
@@ -253,10 +257,9 @@ test.describe('RBAC: anonymous', () => {
       data: { title: 'rbac-probe-should-never-be-created' },
       failOnStatusCode: false,
     });
-    expect(
-      [401, 403],
-      'unauthenticated create must be refused before any write'
-    ).toContain(response.status());
+    expect([401, 403], 'unauthenticated create must be refused before any write').toContain(
+      response.status()
+    );
     assertNoLeak(await response.text(), 'anonymous POST /api/books');
   });
 
@@ -316,15 +319,12 @@ test.describe('RBAC: forged mangu-role cookie', () => {
     });
   }
 
-  test('forged cookie does not change the server-reported role', async ({ request, baseURL }) => {
-    test.skip(!baseURL, 'baseURL is required to scope the forged cookie');
-    const response = await request.get('/api/session', {
-      headers: { cookie: 'mangu-role=admin' },
-    });
-    const body = await response.text();
-    expect(body, 'the session endpoint must derive the role from the session, not a cookie').not.toContain(
-      '"role":"admin"'
-    );
+  test('forged cookie does not change the server-reported role', async ({ request }) => {
+    const response = await request.get('/api/session', { headers: { cookie: 'mangu-role=admin' } });
+    expect(
+      await response.text(),
+      'the session endpoint must derive the role from the session, not a cookie'
+    ).not.toContain('"role":"admin"');
   });
 });
 
@@ -364,24 +364,32 @@ const MATRIX: Record<Role, { allowed: string[]; denied: string[] }> = {
 
 for (const role of ROLES) {
   test.describe(`RBAC: ${role}`, () => {
-    // Serial: one UI login feeds the whole block, and parallel logins would
-    // trip the 5-per-60s auth limiter and fail for the wrong reason.
+    // Serial: one cached UI login feeds the whole block, and parallel logins
+    // would trip the 5-per-60s auth limiter and fail for the wrong reason.
     test.describe.configure({ mode: 'serial' });
 
     const credentials = credentialsFor(role);
     test.skip(!credentials, missingCredentialsReason(role));
-    test.skip(!hasRealAuthBackend(), 'No real auth backend configured (mock gate) — RBAC not enforced');
+    test.skip(
+      !hasRealAuthBackend(),
+      'No real auth backend configured (mock gate) — RBAC is not enforced'
+    );
 
-    let statePath: string;
+    let context: BrowserContext;
+    let page: Page;
 
-    test.beforeAll(async ({ browser }) => {
-      statePath = await storageStateFor(browser, role, credentials as Credentials);
+    test.beforeEach(async ({ browser }) => {
+      const state = await storageStateFor(browser, role, credentials as Credentials);
+      context = await browser.newContext({ storageState: state });
+      page = await context.newPage();
     });
 
-    test.use({ storageState: ({}, use) => use(statePath) });
+    test.afterEach(async () => {
+      await context?.close();
+    });
 
     for (const route of MATRIX[role].allowed) {
-      test(`can open ${route}`, async ({ page }) => {
+      test(`can open ${route}`, async () => {
         const response = await page.goto(route);
         expect(response, `expected a response for ${route}`).not.toBeNull();
         expect(response?.status(), `${role} should get 200 on ${route}`).toBe(200);
@@ -390,7 +398,7 @@ for (const role of ROLES) {
     }
 
     for (const route of MATRIX[role].denied) {
-      test(`is bounced from ${route} without seeing data`, async ({ page }) => {
+      test(`is bounced from ${route} without seeing data`, async () => {
         await page.goto(route);
         await page.waitForURL((url) => url.pathname === '/');
         expect(pathnameOf(page), `${role} must not reach ${route}`).toBe('/');
@@ -398,27 +406,28 @@ for (const role of ROLES) {
       });
     }
 
-    for (const route of ADMIN_ACTION_ROUTES) {
-      if (role === 'admin') continue; // Do not exercise real mutations.
-      test(`cannot invoke the admin action surface at ${route}`, async ({ page }) => {
-        const response = await page.request.post(route, {
-          form: { profileId: '00000000-0000-0000-0000-000000000000', role: 'admin' },
-          failOnStatusCode: false,
-          maxRedirects: 0,
-        });
-        expect(response.status(), `${role} POST ${route} must not be accepted`).not.toBe(200);
-        assertNoLeak(await response.text(), `${role} POST ${route}`);
+    if (role !== 'admin') {
+      for (const route of ADMIN_ACTION_ROUTES) {
+        test(`cannot invoke the admin action surface at ${route}`, async () => {
+          const response = await page.request.post(route, {
+            form: { profileId: '00000000-0000-0000-0000-000000000000', role: 'admin' },
+            failOnStatusCode: false,
+            maxRedirects: 0,
+          });
+          expect(response.status(), `${role} POST ${route} must not be accepted`).not.toBe(200);
+          assertNoLeak(await response.text(), `${role} POST ${route}`);
 
-        // The effect matters more than the status: the caller must still be
-        // whatever they were before the attempt.
-        const session = await page.request.get('/api/session');
-        expect(await session.text(), 'role escalation must not have occurred').not.toContain(
-          '"role":"admin"'
-        );
-      });
+          // The effect matters more than the status: the caller must still be
+          // whatever they were before the attempt.
+          const session = await page.request.get('/api/session');
+          expect(await session.text(), 'role escalation must not have occurred').not.toContain(
+            '"role":"admin"'
+          );
+        });
+      }
     }
 
-    test('partner CSV export matches the documented permission', async ({ page }) => {
+    test('partner CSV export matches the documented permission', async () => {
       const response = await page.request.get('/partner/orders/export', {
         failOnStatusCode: false,
         maxRedirects: 0,
@@ -433,7 +442,7 @@ for (const role of ROLES) {
       }
     });
 
-    test('cannot create a book unless the role allows it', async ({ page }) => {
+    test('book creation is gated on the server-derived role', async () => {
       const response = await page.request.post('/api/books', {
         data: { title: 'rbac-probe-should-never-be-created' },
         failOnStatusCode: false,
@@ -442,14 +451,15 @@ for (const role of ROLES) {
         expect(response.status(), 'reader must be refused with 403').toBe(403);
         assertNoLeak(await response.text(), 'reader POST /api/books');
       } else {
-        // author/partner/admin are permitted to create; this spec does not
-        // exercise the write path, it only proves the gate is role-derived.
+        // author/partner/admin are permitted to create. This spec does not
+        // exercise the write path — it only proves the gate is role-derived
+        // and that a session holder is never treated as unauthenticated.
         expect(response.status(), `${role} must not be refused as unauthenticated`).not.toBe(401);
       }
     });
 
     for (const root of PORTAL_ROOTS_WITHOUT_INDEX) {
-      test(`portal root ${root} has no index page (documented gap)`, async ({ page }, testInfo) => {
+      test(`portal root ${root} has no index page (documented gap)`, async ({}, testInfo) => {
         const response = await page.goto(root);
         const status = response?.status() ?? 0;
         const landedOn = pathnameOf(page);
