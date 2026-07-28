@@ -14,9 +14,23 @@ import {
   type UpdateBookInput,
 } from '@/types/books';
 import { isMongoPrimary } from '@/lib/db/provider';
-import { createBookMongo, updateBookMongo } from '@/lib/mongo-books';
+import {
+  createBookAdminMongo,
+  createBookMongo,
+  updateBookAdminMongo,
+  updateBookMongo,
+} from '@/lib/mongo-books';
 import { getBookById } from '@/lib/mongo-queries';
 import { recordAudit } from '@/lib/audit';
+import { setBookAssets } from '@/lib/data/book-assets';
+import {
+  RETAILER_URL_FIELDS,
+  nullableText,
+  normalizeUrlFields,
+  slugifyBookTitle,
+  visibilityForStatus,
+  type AdminBookStatus,
+} from '@/lib/books/fields';
 
 // Rate limiting
 const RATE_LIMIT = new Map<string, { count: number; timestamp: number }>();
@@ -47,27 +61,53 @@ const checkRateLimit = (userId: string, action: string) => {
   }, 60000);
 };
 
-// Audit logging
-const logAudit = async (
-  supabase: Awaited<ReturnType<typeof createClient>>,
+/**
+ * Audit logging (Task 1.2 — one audit system, not two).
+ *
+ * The local `logAudit` helper that used to live here wrote `resource_id` /
+ * `resource_type` / `details`, columns that exist on no migration, and never
+ * inspected the insert result — so every audit write failed silently. There is
+ * one writer now: `recordAudit` (@/lib/audit), which is provider-aware and
+ * writes real `audit_logs` columns through the service-role client (the table
+ * has no INSERT RLS policy).
+ *
+ * A failed audit is logged loudly but does not fail the caller's write: losing
+ * the book is worse than losing the audit row, and the gap is now visible.
+ */
+const audit = async (
+  actorId: string,
   action: string,
-  resourceId: string,
-  resourceType: string,
-  details: Record<string, any>
-) => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  target: string,
+  metadata: Record<string, unknown>
+): Promise<void> => {
+  const result = await recordAudit(actorId, action, target, metadata);
+  if (!result.ok) {
+    console.error(`[audit] ${action} on ${target} was not recorded: ${result.error}`);
+  }
+};
 
-  await supabase.from('audit_logs').insert({
-    user_id: user?.id,
-    action,
-    resource_id: resourceId,
-    resource_type: resourceType,
-    details,
-    ip_address: null, // Would be set by a middleware in production
-    user_agent: null,
-  });
+/*
+ * SCHEMA NOTE — columns that actually exist on Supabase `books`
+ * (20260116000000_initial_schema, + visibility 20260118000000,
+ * + content_type 20260619124500, + retailer URLs 20260619170000).
+ *
+ * Every write below builds its payload from this set explicitly instead of
+ * spreading validated input. Spreading wrote `subtitle`, `epub_url`,
+ * `manuscript_url`, `author_name`, `metadata`, `tags`, `categories`,
+ * `language`, `seo_*` and `deleted_at` — none of which exist — and PostgREST
+ * rejects the WHOLE statement when a single column is unknown, so one drifted
+ * field silently broke the entire write. New migrations are blocked until
+ * hosted drift is reconciled (Task 3.6), so every disposition is code-side:
+ * drop the field, or remap it onto a real column.
+ */
+
+/** EPUBs are assets, not book columns — `book_content.epub_url` on Supabase. */
+const writeEpubAsset = async (bookId: string, epubUrl: string | null | undefined) => {
+  if (epubUrl === undefined) return;
+  const result = await setBookAssets(bookId, { epub_url: nullableText(epubUrl) });
+  if (!result.ok) {
+    console.error(`[books] epub asset write failed for ${bookId}: ${result.error}`);
+  }
 };
 
 export async function createBook(input: CreateBookInput) {
@@ -95,8 +135,9 @@ export async function createBook(input: CreateBookInput) {
           code: result.code === 'DUPLICATE_SLUG' ? 'DUPLICATE_BOOK' : result.code,
         };
       }
-      await recordAudit(user.id, 'CREATE', String(result.book._id), {
-        resource_type: 'book',
+      await writeEpubAsset(String(result.book._id), validated.epub_url);
+      await audit(user.id, 'CREATE', String(result.book._id), {
+        resource_type: 'books',
         title: result.book.title,
         status: result.book.status,
       });
@@ -122,20 +163,18 @@ export async function createBook(input: CreateBookInput) {
     // Validate input
     const validated = CreateBookSchema.parse(input);
 
-    // Generate slug from title
-    const slug = validated.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    // Slug derivation is shared with every other create path.
+    const slug = slugifyBookTitle(validated.title);
 
-    // Check for duplicate slug
+    // Duplicate check. The old `.is('deleted_at', null)` filter referenced a
+    // column that does not exist, so this query errored and every duplicate
+    // read as "no duplicate".
     const { data: existingBook } = await supabase
       .from('books')
       .select('id')
       .eq('slug', slug)
       .eq('author_id', user.id)
-      .is('deleted_at', null)
-      .single();
+      .maybeSingle();
 
     if (existingBook) {
       return {
@@ -148,21 +187,26 @@ export async function createBook(input: CreateBookInput) {
     const { data, error } = await supabase
       .from('books')
       .insert({
-        ...validated,
+        title: validated.title,
         slug,
+        description: nullableText(validated.description),
+        isbn: nullableText(validated.isbn),
+        cover_url: nullableText(validated.cover_url),
         author_id: user.id,
-        author_name: user.user_metadata?.full_name || user.email || 'Anonymous',
-        metadata: validated.metadata || {},
-        tags: validated.tags || [],
-        categories: validated.categories || [],
       })
       .select()
       .single();
 
     if (error) throw error;
 
+    // `books.manuscript_url` and `books.epub_url` exist in no migration; on
+    // Supabase the readable file lives on `book_content.epub_url` (which is
+    // what app/api/files/[id] serves), so route both inputs there.
+    await writeEpubAsset(data.id, validated.epub_url ?? validated.manuscript_url);
+
     // Log audit
-    await logAudit(supabase, 'CREATE', data.id, 'book', {
+    await audit(user.id, 'CREATE', data.id, {
+      resource_type: 'books',
       title: data.title,
       status: data.status,
     });
@@ -219,8 +263,9 @@ export async function updateBook(bookId: string, input: UpdateBookInput) {
       if ('error' in result) {
         return { success: false, error: result.error, code: result.code };
       }
-      await recordAudit(user.id, 'UPDATE', bookId, {
-        resource_type: 'book',
+      await writeEpubAsset(bookId, validated.epub_url);
+      await audit(user.id, 'UPDATE', bookId, {
+        resource_type: 'books',
         title: result.book.title,
       });
       revalidatePath('/admin/books');
@@ -246,19 +291,16 @@ export async function updateBook(bookId: string, input: UpdateBookInput) {
     // Validate input
     const validated = UpdateBookSchema.parse(input);
 
-    // Check ownership and if book exists
+    // Check ownership and if book exists. `deleted_at` is gone: soft delete is
+    // now expressed through the real `status` column (see deleteBook).
     const { data: book } = await supabase
       .from('books')
-      .select('author_id, deleted_at')
+      .select('author_id')
       .eq('id', bookId)
-      .single();
+      .maybeSingle();
 
     if (!book || book.author_id !== user.id) {
       return { success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-    }
-
-    if (book.deleted_at) {
-      return { success: false, error: 'Book has been deleted', code: 'BOOK_DELETED' };
     }
 
     // Handle slug uniqueness if being updated
@@ -269,8 +311,7 @@ export async function updateBook(bookId: string, input: UpdateBookInput) {
         .eq('slug', validated.slug)
         .neq('id', bookId)
         .eq('author_id', user.id)
-        .is('deleted_at', null)
-        .single();
+        .maybeSingle();
 
       if (existingBook) {
         return {
@@ -281,21 +322,37 @@ export async function updateBook(bookId: string, input: UpdateBookInput) {
       }
     }
 
+    // Explicit allow-list of real columns (see the note above).
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (validated.title !== undefined) updates.title = validated.title;
+    if (validated.description !== undefined) {
+      updates.description = nullableText(validated.description);
+    }
+    if (validated.isbn !== undefined) updates.isbn = nullableText(validated.isbn);
+    if (validated.cover_url !== undefined) updates.cover_url = nullableText(validated.cover_url);
+    if (validated.page_count !== undefined) updates.page_count = validated.page_count;
+    if (validated.word_count !== undefined) updates.word_count = validated.word_count;
+    if (validated.slug !== undefined) updates.slug = validated.slug;
+    if (validated.status !== undefined) {
+      updates.status = validated.status;
+      updates.visibility = visibilityForStatus(validated.status);
+    }
+
     const { data, error } = await supabase
       .from('books')
-      .update({
-        ...validated,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq('id', bookId)
       .select()
       .single();
 
     if (error) throw error;
 
+    await writeEpubAsset(bookId, validated.epub_url ?? validated.manuscript_url);
+
     // Log audit
-    await logAudit(supabase, 'UPDATE', bookId, 'book', {
-      changes: Object.keys(validated),
+    await audit(user.id, 'UPDATE', bookId, {
+      resource_type: 'books',
+      changes: Object.keys(updates).filter((k) => k !== 'updated_at'),
       new_status: validated.status,
     });
 
@@ -329,12 +386,20 @@ export async function updateBook(bookId: string, input: UpdateBookInput) {
 /**
  * Admin-only book update. Unlike updateBook (author-scoped), this lets a user
  * with the 'admin' role edit ANY book, including the external retailer URLs.
+ *
+ * Task 1.0: authentication and the admin role check stay on Supabase (locked
+ * architecture: AUTH_PROVIDER=supabase). Only the WRITE branches on
+ * DATABASE_PROVIDER — before this, the write always went to Supabase while
+ * production read MongoDB, so an edited book never changed on the site.
+ *
+ * `subtitle` is deliberately absent: `books.subtitle` exists in no migration
+ * and new migrations are blocked until Task 3.6, so it is removed from the
+ * admin surface rather than written to a column that is not there.
  */
 export async function updateBookAdmin(
   bookId: string,
   input: {
     title?: string;
-    subtitle?: string;
     description?: string;
     content_type?: 'book' | 'comic' | 'paper';
     slug?: string;
@@ -343,7 +408,7 @@ export async function updateBookAdmin(
     genre?: string;
     page_count?: number;
     word_count?: number;
-    status?: 'draft' | 'published' | 'archived';
+    status?: AdminBookStatus;
     cover_url?: string | null;
     epub_url?: string | null;
     amazon_url?: string | null;
@@ -379,52 +444,101 @@ export async function updateBookAdmin(
 
     checkRateLimit(user.id, 'update_book_admin');
 
+    // Retailer links are external by contract: reject anything the PDP could
+    // never render rather than storing a dead link.
+    const { values: retailerUrls, issues } = normalizeUrlFields(
+      input as Record<string, string | null | undefined>,
+      RETAILER_URL_FIELDS
+    );
+    if (issues.length > 0) {
+      return {
+        success: false,
+        error: `${issues[0].field}: ${issues[0].message}`,
+        code: 'VALIDATION_ERROR',
+      };
+    }
+
+    if (isMongoPrimary()) {
+      const result = await updateBookAdminMongo(bookId, {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.slug !== undefined ? { slug: input.slug } : {}),
+        ...(input.description !== undefined
+          ? { description: nullableText(input.description) }
+          : {}),
+        ...(input.genre !== undefined ? { genre: nullableText(input.genre) } : {}),
+        ...(input.price !== undefined ? { price: input.price } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.content_type !== undefined ? { content_type: input.content_type } : {}),
+        ...(input.isbn !== undefined ? { isbn: nullableText(input.isbn) } : {}),
+        ...(input.page_count !== undefined ? { page_count: input.page_count } : {}),
+        ...(input.word_count !== undefined ? { word_count: input.word_count } : {}),
+        ...(input.cover_url !== undefined ? { cover_url: nullableText(input.cover_url) } : {}),
+        ...retailerUrls,
+      });
+
+      if ('error' in result) {
+        return {
+          success: false,
+          error: result.error,
+          code: result.code === 'VALIDATION' ? 'VALIDATION_ERROR' : result.code,
+        };
+      }
+
+      await writeEpubAsset(bookId, input.epub_url);
+      await audit(user.id, 'UPDATE', bookId, {
+        resource_type: 'books',
+        changes: Object.keys(input),
+        admin: true,
+      });
+
+      revalidatePath('/admin/books');
+      revalidatePath(`/books/${bookId}`);
+      if (result.book?.slug) revalidatePath(`/books/${result.book.slug}`);
+      revalidateTag('featured-books');
+      revalidateBooks();
+
+      return { success: true, data: result.book, code: 'BOOK_UPDATED' };
+    }
+
     // Service-role client after role check — matches createBookAdmin / updateBookStatusAction.
     // There is no admin UPDATE RLS policy on books for the session client.
     const admin = createAdminClient();
 
     const { data: existing } = await admin
       .from('books')
-      .select('id, deleted_at')
+      .select('id, status, published_at')
       .eq('id', bookId)
-      .single();
+      .maybeSingle();
 
     if (!existing) {
       return { success: false, error: 'Book not found', code: 'NOT_FOUND' };
     }
-    if (existing.deleted_at) {
-      return { success: false, error: 'Book has been deleted', code: 'BOOK_DELETED' };
-    }
 
-    // Normalize a URL input: trimmed string, or null when blank.
-    const url = (v?: string | null) => {
-      const t = (v ?? '').trim();
-      return t.length ? t : null;
-    };
-
-    // Only write keys that were actually provided.
+    // Only write keys that were actually provided, and only real columns.
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (input.title !== undefined) updates.title = input.title;
-    if (input.subtitle !== undefined) updates.subtitle = input.subtitle || null;
-    if (input.description !== undefined) updates.description = input.description || null;
+    if (input.description !== undefined) updates.description = nullableText(input.description);
     if (input.content_type !== undefined) updates.content_type = input.content_type;
     if (input.slug !== undefined) updates.slug = input.slug;
     if (input.price !== undefined) updates.price = input.price;
-    if (input.isbn !== undefined) updates.isbn = input.isbn || null;
-    if (input.genre !== undefined) updates.genre = input.genre || null;
+    if (input.isbn !== undefined) updates.isbn = nullableText(input.isbn);
+    if (input.genre !== undefined) updates.genre = nullableText(input.genre);
     if (input.page_count !== undefined) updates.page_count = input.page_count;
     if (input.word_count !== undefined) updates.word_count = input.word_count;
-    if (input.status !== undefined) updates.status = input.status;
-    if (input.cover_url !== undefined) updates.cover_url = url(input.cover_url);
-    if (input.epub_url !== undefined) updates.epub_url = url(input.epub_url);
-    if (input.amazon_url !== undefined) updates.amazon_url = url(input.amazon_url);
-    if (input.kindle_url !== undefined) updates.kindle_url = url(input.kindle_url);
-    if (input.apple_books_url !== undefined) updates.apple_books_url = url(input.apple_books_url);
-    if (input.audible_url !== undefined) updates.audible_url = url(input.audible_url);
-    if (input.barnes_noble_url !== undefined)
-      updates.barnes_noble_url = url(input.barnes_noble_url);
-    if (input.google_play_books_url !== undefined)
-      updates.google_play_books_url = url(input.google_play_books_url);
+    if (input.cover_url !== undefined) updates.cover_url = nullableText(input.cover_url);
+    Object.assign(updates, retailerUrls);
+
+    if (input.status !== undefined) {
+      updates.status = input.status;
+      // The public catalog requires status=published AND visibility=public, and
+      // the admin UI exposes status only, so visibility is derived from it.
+      updates.visibility = visibilityForStatus(input.status);
+      // Stamp the FIRST publication only. Unpublishing must never null
+      // published_at — that destroys the original publication date.
+      if (input.status === 'published' && !existing.published_at) {
+        updates.published_at = new Date().toISOString();
+      }
+    }
 
     // Slug uniqueness across all books (admin is not author-scoped).
     if (typeof updates.slug === 'string') {
@@ -433,8 +547,7 @@ export async function updateBookAdmin(
         .select('id')
         .eq('slug', updates.slug)
         .neq('id', bookId)
-        .is('deleted_at', null)
-        .single();
+        .maybeSingle();
       if (dupe) {
         return {
           success: false,
@@ -453,7 +566,10 @@ export async function updateBookAdmin(
 
     if (error) throw error;
 
-    await logAudit(supabase, 'UPDATE', bookId, 'book', {
+    await writeEpubAsset(bookId, input.epub_url);
+
+    await audit(user.id, 'UPDATE', bookId, {
+      resource_type: 'books',
       changes: Object.keys(updates).filter((k) => k !== 'updated_at'),
       admin: true,
     });
@@ -478,8 +594,10 @@ export async function updateBookAdmin(
 /**
  * Admin-only book creation for /admin/books/new. Unlike createBook
  * (author-scoped, RLS requires author_id = auth.uid()), this lets an admin
- * create a book for any author (or none), so the insert uses the service-role
- * client after the role check passes.
+ * create a book for any author (or none), so the Supabase insert uses the
+ * service-role client after the role check passes.
+ *
+ * Task 1.0: the write branches on DATABASE_PROVIDER; auth stays on Supabase.
  */
 export async function createBookAdmin(input: {
   title: string;
@@ -487,7 +605,7 @@ export async function createBookAdmin(input: {
   description?: string;
   genre: string;
   price?: number;
-  status?: 'draft' | 'published';
+  status?: AdminBookStatus;
   content_type?: 'book' | 'comic' | 'paper';
   author_id?: string | null;
   cover_url?: string | null;
@@ -525,16 +643,53 @@ export async function createBookAdmin(input: {
       return { success: false, error: 'Genre is required', code: 'VALIDATION_ERROR' };
     }
 
-    const slug = (input.slug || title)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    const slug = slugifyBookTitle(input.slug || title);
     if (!slug) {
       return {
         success: false,
         error: 'Slug could not be derived from title',
         code: 'VALIDATION_ERROR',
       };
+    }
+
+    const status: AdminBookStatus = input.status || 'draft';
+
+    if (isMongoPrimary()) {
+      const result = await createBookAdminMongo({
+        title,
+        slug,
+        description: nullableText(input.description),
+        genre,
+        price: input.price ?? 0,
+        status,
+        content_type: input.content_type || 'book',
+        author_id: input.author_id || null,
+        cover_url: nullableText(input.cover_url),
+      });
+
+      if ('error' in result) {
+        return {
+          success: false,
+          error: result.error,
+          code: result.code === 'VALIDATION' ? 'VALIDATION_ERROR' : result.code,
+        };
+      }
+
+      const bookId = String(result.book._id);
+      await writeEpubAsset(bookId, input.epub_url);
+      await audit(user.id, 'CREATE', bookId, {
+        resource_type: 'books',
+        title: result.book.title,
+        status: result.book.status,
+        admin: true,
+      });
+
+      revalidatePath('/admin/books');
+      revalidatePath('/books');
+      revalidateTag('featured-books');
+      revalidateBooks();
+
+      return { success: true, data: result.book, code: 'BOOK_CREATED' };
     }
 
     const admin = createAdminClient();
@@ -548,20 +703,20 @@ export async function createBookAdmin(input: {
       };
     }
 
-    const status = input.status || 'draft';
     const { data, error } = await admin
       .from('books')
       .insert({
         title,
         slug,
-        description: input.description?.trim() || null,
+        description: nullableText(input.description),
         genre,
         price: input.price ?? 0,
         status,
+        // Derived, not exposed: the catalog needs published + public together.
+        visibility: visibilityForStatus(status),
         content_type: input.content_type || 'book',
         author_id: input.author_id || null,
-        cover_url: input.cover_url?.trim() || null,
-        epub_url: input.epub_url?.trim() || null,
+        cover_url: nullableText(input.cover_url),
         published_at: status === 'published' ? new Date().toISOString() : null,
       })
       .select()
@@ -569,7 +724,10 @@ export async function createBookAdmin(input: {
 
     if (error) throw error;
 
-    await logAudit(supabase, 'CREATE', data.id, 'book', {
+    await writeEpubAsset(data.id, input.epub_url);
+
+    await audit(user.id, 'CREATE', data.id, {
+      resource_type: 'books',
       title: data.title,
       status: data.status,
       admin: true,
@@ -591,6 +749,15 @@ export async function createBookAdmin(input: {
   }
 }
 
+/**
+ * Delete a book. `hardDelete` still removes the row (admin only).
+ *
+ * The former "soft delete" wrote `books.deleted_at`, a column that exists in no
+ * migration, so it never deleted anything — the statement was rejected. Soft
+ * delete is now expressed through the real `status` column: `archived` plus a
+ * non-public visibility takes the book out of every public read path without
+ * destroying the row. Nothing that used to be a soft delete became a hard one.
+ */
 export async function deleteBook(bookId: string, hardDelete: boolean = false) {
   try {
     const supabase = await createClient();
@@ -607,9 +774,9 @@ export async function deleteBook(bookId: string, hardDelete: boolean = false) {
 
     const { data: book } = await supabase
       .from('books')
-      .select('author_id, deleted_at')
+      .select('author_id, status')
       .eq('id', bookId)
-      .single();
+      .maybeSingle();
 
     if (!book || book.author_id !== user.id) {
       return { success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
@@ -625,17 +792,23 @@ export async function deleteBook(bookId: string, hardDelete: boolean = false) {
 
       if (error) throw error;
     } else {
-      // Soft delete
+      // Archive (the replacement for the never-working soft delete)
       const { error } = await supabase
         .from('books')
-        .update({ deleted_at: new Date().toISOString() })
+        .update({
+          status: 'archived',
+          visibility: visibilityForStatus('archived'),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', bookId);
 
       if (error) throw error;
     }
 
     // Log audit
-    await logAudit(supabase, hardDelete ? 'HARD_DELETE' : 'SOFT_DELETE', bookId, 'book', {});
+    await audit(user.id, hardDelete ? 'HARD_DELETE' : 'SOFT_DELETE', bookId, {
+      resource_type: 'books',
+    });
 
     revalidatePath('/admin/books');
     revalidatePath('/books');
@@ -653,6 +826,7 @@ export async function deleteBook(bookId: string, hardDelete: boolean = false) {
   }
 }
 
+/** Restore an archived book to draft (the inverse of deleteBook's archive). */
 export async function restoreBook(bookId: string) {
   try {
     const supabase = await createClient();
@@ -667,30 +841,31 @@ export async function restoreBook(bookId: string) {
 
     const { data: book } = await supabase
       .from('books')
-      .select('author_id, deleted_at')
+      .select('author_id, status')
       .eq('id', bookId)
-      .single();
+      .maybeSingle();
 
     if (!book || book.author_id !== user.id) {
       return { success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
     }
 
-    if (!book.deleted_at) {
-      return { success: false, error: 'Book is not deleted', code: 'NOT_DELETED' };
+    if (book.status !== 'archived') {
+      return { success: false, error: 'Book is not archived', code: 'NOT_DELETED' };
     }
 
     const { error } = await supabase
       .from('books')
       .update({
-        deleted_at: null,
         status: 'draft', // Reset to draft when restoring
+        visibility: visibilityForStatus('draft'),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', bookId);
 
     if (error) throw error;
 
     // Log audit
-    await logAudit(supabase, 'RESTORE', bookId, 'book', {});
+    await audit(user.id, 'RESTORE', bookId, { resource_type: 'books' });
 
     revalidatePath('/admin/books');
     revalidatePath('/books');
@@ -710,7 +885,6 @@ export async function restoreBook(bookId: string) {
 
 export async function getMyBooks(options?: {
   status?: Book['status'];
-  includeDeleted?: boolean;
   limit?: number;
   offset?: number;
 }) {
@@ -732,9 +906,8 @@ export async function getMyBooks(options?: {
       query = query.eq('status', options.status);
     }
 
-    if (!options?.includeDeleted) {
-      query = query.is('deleted_at', null);
-    }
+    // No `deleted_at` filter: the column does not exist. Archived books are
+    // still the author's books and stay visible in their own list.
 
     if (options?.limit) {
       query = query.limit(options.limit);
@@ -764,183 +937,21 @@ export async function getMyBooks(options?: {
   }
 }
 
-export async function searchBooks(
-  query: string,
-  filters?: {
-    language?: string;
-    minRating?: number;
-    category?: string;
-    tag?: string;
-    limit?: number;
-  }
-) {
-  try {
-    const supabase = await createClient();
-
-    let sqlQuery = `
-      SELECT 
-        id, title, subtitle, author_name, cover_url, average_rating,
-        ts_rank(search_vector, websearch_to_tsquery('english', $1)) as relevance,
-        ts_headline('english', description, websearch_to_tsquery('english', $1)) as match_snippet
-      FROM books
-      WHERE search_vector @@ websearch_to_tsquery('english', $1)
-        AND status = 'published'
-        AND deleted_at IS NULL
-    `;
-
-    const params: any[] = [query];
-    let paramIndex = 2;
-
-    if (filters?.language) {
-      sqlQuery += ` AND language = $${paramIndex}`;
-      params.push(filters.language);
-      paramIndex++;
-    }
-
-    if (filters?.minRating) {
-      sqlQuery += ` AND average_rating >= $${paramIndex}`;
-      params.push(filters.minRating);
-      paramIndex++;
-    }
-
-    if (filters?.category) {
-      sqlQuery += ` AND $${paramIndex} = ANY(categories)`;
-      params.push(filters.category);
-      paramIndex++;
-    }
-
-    if (filters?.tag) {
-      sqlQuery += ` AND $${paramIndex} = ANY(tags)`;
-      params.push(filters.tag);
-      paramIndex++;
-    }
-
-    sqlQuery += ` ORDER BY relevance DESC`;
-
-    if (filters?.limit) {
-      sqlQuery += ` LIMIT $${paramIndex}`;
-      params.push(filters.limit);
-    }
-
-    const { data, error } = await supabase.rpc('books_search', {
-      search_query: query,
-      ...filters,
-    });
-
-    if (error) throw error;
-
-    return { success: true, data, code: 'SEARCH_COMPLETED' };
-  } catch (error) {
-    console.error('Search books error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to search books',
-      code: 'UNKNOWN_ERROR',
-    };
-  }
-}
-
-export async function getBookStats(bookId: string) {
-  try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-
-    const { data: book } = await supabase
-      .from('books')
-      .select('author_id')
-      .eq('id', bookId)
-      .single();
-
-    if (!book || book.author_id !== user.id) {
-      return { success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-    }
-
-    // Get monthly stats
-    const { data: monthlyStats } = await supabase
-      .from('book_stats')
-      .select('*')
-      .eq('book_id', bookId)
-      .order('month', { ascending: false })
-      .limit(12);
-
-    // Get total stats
-    const { data: totalStats } = await supabase
-      .from('books')
-      .select('view_count, download_count, average_rating, review_count')
-      .eq('id', bookId)
-      .single();
-
-    return {
-      success: true,
-      data: {
-        ...totalStats,
-        monthly_trends: monthlyStats || [],
-      },
-      code: 'STATS_FETCHED',
-    };
-  } catch (error) {
-    console.error('Get book stats error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch stats',
-      code: 'UNKNOWN_ERROR',
-    };
-  }
-}
-
-export async function incrementViewCount(bookId: string) {
-  try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const userId = user?.id || 'anonymous';
-
-    // Check if user has viewed this book recently (within 24 hours)
-    const cacheKey = `view:${bookId}:${userId}`;
-    const lastViewed = await supabase
-      .from('book_view_cache')
-      .select('last_viewed')
-      .eq('cache_key', cacheKey)
-      .single();
-
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-    if (!lastViewed.data || new Date(lastViewed.data.last_viewed) < twentyFourHoursAgo) {
-      await Promise.all([
-        // Increment view count
-        supabase.rpc('increment_view_count', { book_id: bookId }),
-
-        // Update cache
-        supabase.from('book_view_cache').upsert(
-          {
-            cache_key: cacheKey,
-            last_viewed: now.toISOString(),
-          },
-          { onConflict: 'cache_key' }
-        ),
-
-        // Log view for analytics
-        supabase.from('book_views').insert({
-          book_id: bookId,
-          user_id: userId,
-          viewed_at: now.toISOString(),
-          ip_address: null,
-          user_agent: null,
-        }),
-      ]);
-    }
-
-    return { success: true, code: 'VIEW_INCREMENTED' };
-  } catch (error) {
-    console.error('Increment view count error:', error);
-    // Don't fail the request if view counting fails
-    return { success: false, code: 'VIEW_INCREMENT_FAILED' };
-  }
-}
+/*
+ * Removed in Task 1.2 (schema drift, code-side dispositions):
+ *
+ * - `searchBooks` built a raw SQL string it never executed and then called the
+ *   RPC `books_search`, which exists in no migration. Nothing imported it: the
+ *   catalog uses `searchBooks` from `@/lib/mongo-queries` (via lib/data/books)
+ *   and `@/lib/supabase/queries` — same name, different modules.
+ * - `getBookStats` selected `books.view_count` / `books.download_count` /
+ *   `books.review_count` and a `book_stats` table; none exist (the real columns
+ *   are `total_reads` / `total_reviews` / `average_rating`, and the real table
+ *   is `book_stats_daily`). It had no callers, so it is removed rather than
+ *   half-remapped onto a daily table with a monthly response shape.
+ * - `incrementViewCount` wrote `book_view_cache` / `book_views` and called the
+ *   RPC `increment_view_count`; none exist, it swallowed its own errors, and it
+ *   had no callers.
+ *
+ * All three are restorable from git history once Task 3.6 unblocks migrations.
+ */
