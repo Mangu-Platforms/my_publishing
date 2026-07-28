@@ -193,6 +193,16 @@ describe('createBookAdminMongo', () => {
     });
   });
 
+  it('stamps featured_at alongside is_featured, and leaves it null otherwise', async () => {
+    const featured = mockDb();
+    await createBookAdminMongo({ title: 'Resonance', is_featured: true }, featured.db);
+    expect(insertedDoc(featured.insertOne).featured_at).toBeInstanceOf(Date);
+
+    const plain = mockDb();
+    await createBookAdminMongo({ title: 'Resonance' }, plain.db);
+    expect(insertedDoc(plain.insertOne).featured_at).toBeNull();
+  });
+
   it('never writes subtitle or any other unlisted key', async () => {
     const { db, insertOne } = mockDb();
 
@@ -310,6 +320,39 @@ describe('updateBookAdminMongo', () => {
     expect($set).not.toHaveProperty('kindle_url');
     expect($set).not.toHaveProperty('title');
     expect($set.updated_at).toBeInstanceOf(Date);
+  });
+
+  it('stamps featured_at on the first feature and never restamps it', async () => {
+    const first = mockDb({ currentDoc: { _id: BOOK_ID, featured_at: null } });
+    await updateBookAdminMongo(BOOK_ID, { is_featured: true }, first.db);
+    const $first = setPayload(first.findOneAndUpdate);
+    expect($first.is_featured).toBe(true);
+    expect($first.featured_at).toBeInstanceOf(Date);
+
+    const original = new Date('2024-05-05T00:00:00.000Z');
+    const again = mockDb({ currentDoc: { _id: BOOK_ID, featured_at: original } });
+    await updateBookAdminMongo(BOOK_ID, { is_featured: true }, again.db);
+    expect(setPayload(again.findOneAndUpdate)).not.toHaveProperty('featured_at');
+  });
+
+  it('clears featured_at when the book is un-featured, without reading first', async () => {
+    const { db, findOneAndUpdate, findOne } = mockDb();
+
+    await updateBookAdminMongo(BOOK_ID, { is_featured: false }, db);
+
+    const $set = setPayload(findOneAndUpdate);
+    expect($set.is_featured).toBe(false);
+    expect($set.featured_at).toBeNull();
+    // Un-featuring needs no stored value, so it stays a single write.
+    expect(findOne).not.toHaveBeenCalled();
+  });
+
+  it('leaves featured_at alone when is_featured is not part of the patch', async () => {
+    const { db, findOneAndUpdate } = mockDb();
+
+    await updateBookAdminMongo(BOOK_ID, { title: 'Resonance' }, db);
+
+    expect(setPayload(findOneAndUpdate)).not.toHaveProperty('featured_at');
   });
 
   it('never writes subtitle or any other unlisted key', async () => {
