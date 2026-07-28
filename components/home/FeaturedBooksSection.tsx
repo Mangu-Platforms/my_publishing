@@ -2,8 +2,12 @@ import Link from 'next/link';
 import { listFeaturedBooks } from '@/lib/data/books';
 import { BookCard } from '@/components/cards/BookCard';
 import { Container } from '@/components/layout/Container';
-import { ChevronRight, BookOpen } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
+/**
+ * Task 4.6 — with nothing to feature the section disappears. An empty shelf
+ * headed "Featured Books" with "check back soon" is an abandoned surface.
+ */
 export async function FeaturedBooksSection() {
   let books: Awaited<ReturnType<typeof listFeaturedBooks>> = [];
   try {
@@ -13,19 +17,7 @@ export async function FeaturedBooksSection() {
   }
 
   if (books.length === 0) {
-    return (
-      <section className="bg-gradient-to-b from-background to-muted/20 py-16">
-        <Container>
-          <div className="py-12 text-center">
-            <BookOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <h2 className="mb-2 text-2xl font-semibold">Featured Books</h2>
-            <p className="text-muted-foreground">
-              No featured books available at the moment. Check back soon!
-            </p>
-          </div>
-        </Container>
-      </section>
-    );
+    return null;
   }
 
   return (
