@@ -30,6 +30,12 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * Task 4.6 — the reply-time promise ("within two business days") was removed
+ * because nobody is measuring it.
+ * TODO(renee): if you want to commit to a response time in writing, tell us
+ * the number and we will put it back.
+ */
 export default function ContactPage() {
   const emailEnabled = isEmailConfigured();
 
@@ -38,11 +44,12 @@ export default function ContactPage() {
       <Container>
         <h1 className="mb-4 text-4xl font-bold">Contact</h1>
         <p className="max-w-2xl text-secondary">
-          Have a question or need support? Email us at{' '}
+          Questions about a book, an order, a manuscript, or a press request all come to the same
+          place. Email{' '}
           <a className="text-primary hover:underline" href={`mailto:${CONTACT_INBOX}`}>
             {CONTACT_INBOX}
-          </a>
-          . We&apos;ll get back to you within two business days.
+          </a>{' '}
+          or use the form below. A person reads every message and replies by email.
         </p>
         <ContactForm enabled={emailEnabled} fallbackEmail={CONTACT_INBOX} />
       </Container>
