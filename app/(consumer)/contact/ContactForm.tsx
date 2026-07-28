@@ -29,13 +29,14 @@ export function ContactForm({
   const [state, formAction] = useFormState(submitContactMessage, initialContactFormState);
 
   // Honest-unavailable state: when email delivery isn't configured we don't
-  // render a form that can't send — we point people at a working address.
+  // render a form that can't send, and we don't promise one later. We point
+  // people at an address that works today (Task 4.6).
   if (!enabled) {
     return (
       <div className="mt-8 max-w-2xl rounded-md border border-input bg-muted/30 p-6">
         <p className="text-sm text-secondary">
-          Our contact form is being set up. In the meantime, the fastest way to reach us is by
-          email:
+          The message form is switched off right now, so use email instead. It reaches the same
+          inbox:
         </p>
         <a
           className="mt-3 inline-block font-medium text-primary hover:underline"
