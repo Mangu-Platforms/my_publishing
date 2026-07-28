@@ -300,6 +300,14 @@ function asArray<T>(value: unknown): T[] {
 }
 
 /**
+ * Byte-order mark. Spreadsheet tools and the Supabase SQL editor prepend one
+ * to CSV exports; left in place it becomes part of the first header cell and
+ * the `version` column silently stops being found. Built from its code point
+ * rather than written literally so the character stays visible in source.
+ */
+const BOM = String.fromCharCode(0xfeff);
+
+/**
  * Accepts any of the three shapes an operator can realistically produce:
  *   1. the §9 JSON envelope (preferred — every section present),
  *   2. a bare JSON array of {version, name} (migration history only),
@@ -309,7 +317,7 @@ function asArray<T>(value: unknown): T[] {
  * reported as "no evidence" rather than guessed.
  */
 export function parseHostedExport(raw: string): HostedExport {
-  const text = raw.replace(/^﻿/, '').trim();
+  const text = (raw.startsWith(BOM) ? raw.slice(1) : raw).trim();
   if (!text) {
     throw new Error('Hosted export is empty. Paste the operator export first.');
   }
