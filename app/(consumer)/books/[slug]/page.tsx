@@ -19,6 +19,27 @@ import type { Metadata } from 'next';
 import type { ApiBook } from '@/lib/data/books';
 import { getSiteUrl } from '@/lib/seo/siteUrl';
 
+/** External retailer links (populated via /admin/books/[id]/edit). */
+const RETAILER_FIELDS: Array<{ field: string; label: string }> = [
+  { field: 'amazon_url', label: 'Amazon' },
+  { field: 'kindle_url', label: 'Kindle' },
+  { field: 'apple_books_url', label: 'Apple Books' },
+  { field: 'google_play_books_url', label: 'Google Play Books' },
+  { field: 'barnes_noble_url', label: 'Barnes & Noble' },
+  { field: 'audible_url', label: 'Audible' },
+];
+
+function getRetailerLinks(book: ApiBook): Array<{ label: string; url: string }> {
+  const links: Array<{ label: string; url: string }> = [];
+  for (const { field, label } of RETAILER_FIELDS) {
+    const value = (book as Record<string, unknown>)[field];
+    if (typeof value === 'string' && /^https:\/\//i.test(value.trim())) {
+      links.push({ label, url: value.trim() });
+    }
+  }
+  return links;
+}
+
 async function getBook(slug: string): Promise<ApiBook | null> {
   return fetchBookForApi({ slug });
 }
@@ -100,6 +121,7 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
     | string
     | undefined;
   const audioUrl = (book as Record<string, unknown>)['audio_url'] as string | undefined;
+  const retailerLinks = getRetailerLinks(book);
 
   return (
     <div>
@@ -166,6 +188,22 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
                   <span>${book.price}</span>
                 )}
               </div>
+              {retailerLinks.length > 0 && (
+                <div className="mt-6">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-secondary">
+                    Also available at
+                  </h2>
+                  <div className="flex flex-wrap gap-3">
+                    {retailerLinks.map(({ label, url }) => (
+                      <Button key={label} asChild variant="outline" size="sm">
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          {label}
+                        </a>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Container>
