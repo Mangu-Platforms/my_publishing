@@ -422,6 +422,10 @@ describe('fetchPublishedBookForCheckout dual-run', () => {
     mockIsMongoPrimary.mockReturnValue(false);
     mockGetBookById.mockReset();
     mockMaybeSingle.mockReset();
+    // The checkout read now resolves through the list terminal, so this mock
+    // must be reset here too or its seed leaks into the audiobooks suite.
+    mockListResult.mockReset();
+    mockListResult.mockResolvedValue({ data: [], error: null });
     jest.resetModules();
   });
 
@@ -432,16 +436,21 @@ describe('fetchPublishedBookForCheckout dual-run', () => {
 
   it('loads published book from supabase public catalog', async () => {
     mockIsMongoPrimary.mockReturnValue(false);
-    mockMaybeSingle.mockResolvedValue({
-      data: {
-        id: 'b1',
-        slug: 'title',
-        title: 'Title',
-        cover_url: null,
-        price: 9.99,
-        discount_price: null,
-        author: { pen_name: 'Pat', profile: { full_name: 'Pat Lee' } },
-      },
+    // fetchPublishedBookForCheckout ends in .order('published_at').limit(1)
+    // since the duplicate-slug hardening and returns data?.[0]; .maybeSingle()
+    // is never reached, so the row has to arrive through the list terminal.
+    mockListResult.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'b1',
+          slug: 'title',
+          title: 'Title',
+          cover_url: null,
+          price: 9.99,
+          discount_price: null,
+          author: { pen_name: 'Pat', profile: { full_name: 'Pat Lee' } },
+        },
+      ],
       error: null,
     });
 
