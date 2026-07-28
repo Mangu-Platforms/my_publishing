@@ -12,7 +12,9 @@
  * Mongo store that BOTH the write mocks and the read mocks share: if a write
  * ever goes somewhere the reads do not look, the round trip fails.
  *
- * Mocking style follows tests/unit/data-catalog-dual-run.test.ts.
+ * Mocking style follows tests/unit/data-catalog-dual-run.test.ts. Shared
+ * fixtures are `mock`-prefixed because jest.mock factories may not reference
+ * out-of-scope identifiers otherwise.
  */
 import { slugifyBookTitle, visibilityForStatus } from '@/lib/books/fields';
 
@@ -65,10 +67,10 @@ type BookDoc = {
   review_count: number;
 };
 
-const bookStore = new Map<string, BookDoc>();
+const mockBookStore = new Map<string, BookDoc>();
 let idCounter = 0;
 
-function matches(doc: BookDoc, filter?: Record<string, unknown>): boolean {
+function mockMatches(doc: BookDoc, filter?: Record<string, unknown>): boolean {
   if (!filter) return true;
   return Object.entries(filter).every(
     ([key, value]) => (doc as unknown as Record<string, unknown>)[key] === value
@@ -76,7 +78,7 @@ function matches(doc: BookDoc, filter?: Record<string, unknown>): boolean {
 }
 
 // --------------------------------------------------------------------------
-// Write side (@/lib/mongo-books) — Agent E's helpers, faked over bookStore.
+// Write side (@/lib/mongo-books) — Agent E's helpers, faked over mockBookStore.
 // --------------------------------------------------------------------------
 const mockCreateBookAdminMongo = jest.fn(
   (input: Partial<BookDoc> & { title: string; status?: string }) => {
@@ -103,13 +105,13 @@ const mockCreateBookAdminMongo = jest.fn(
       avg_rating: 0,
       review_count: 0,
     };
-    bookStore.set(_id, doc);
+    mockBookStore.set(_id, doc);
     return Promise.resolve({ book: doc });
   }
 );
 
 const mockUpdateBookAdminMongo = jest.fn((id: string, patch: Record<string, unknown>) => {
-  const doc = bookStore.get(id);
+  const doc = mockBookStore.get(id);
   if (!doc) return Promise.resolve({ error: 'Book not found', code: 'NOT_FOUND' });
   Object.assign(doc, patch);
   if (typeof patch.status === 'string') {
@@ -121,7 +123,7 @@ const mockUpdateBookAdminMongo = jest.fn((id: string, patch: Record<string, unkn
 });
 
 const mockSetBookStatusMongo = jest.fn((id: string, status: string) => {
-  const doc = bookStore.get(id);
+  const doc = mockBookStore.get(id);
   if (!doc) return Promise.resolve({ error: 'Book not found', code: 'NOT_FOUND' });
   doc.status = status;
   doc.visibility = visibilityForStatus(status as 'draft' | 'published' | 'archived');
@@ -151,12 +153,12 @@ jest.mock('@/lib/mongo-queries', () => ({
   getBooks: jest.fn(),
   searchBooks: jest.fn(async () => ({ items: [], total: 0, page: 1, perPage: 20 })),
   getBookById: jest.fn(async (id: string, filter?: Record<string, unknown>) => {
-    const doc = bookStore.get(id);
-    return doc && matches(doc, filter) ? doc : null;
+    const doc = mockBookStore.get(id);
+    return doc && mockMatches(doc, filter) ? doc : null;
   }),
   getBookBySlug: jest.fn(async (slug: string, filter?: Record<string, unknown>) => {
-    const doc = [...bookStore.values()].find((b) => b.slug === slug);
-    return doc && matches(doc, filter) ? doc : null;
+    const doc = [...mockBookStore.values()].find((b) => b.slug === slug);
+    return doc && mockMatches(doc, filter) ? doc : null;
   }),
 }));
 
@@ -166,7 +168,7 @@ jest.mock('@/lib/mongo', () => ({
       aggregate: (pipeline: Array<Record<string, Record<string, unknown>>>) => ({
         toArray: async () => {
           const match = (pipeline[0]?.$match ?? {}) as Record<string, unknown>;
-          const items = [...bookStore.values()].filter((doc) => matches(doc, match));
+          const items = [...mockBookStore.values()].filter((doc) => mockMatches(doc, match));
           return [{ items, total: [{ count: items.length }] }];
         },
       }),
@@ -236,7 +238,7 @@ function statusForm(bookId: string, status: string): FormData {
 
 describe('Task 1.0 — admin write ↔ public read round trip (DATABASE_PROVIDER=mongodb)', () => {
   beforeEach(() => {
-    bookStore.clear();
+    mockBookStore.clear();
     jest.clearAllMocks();
     mockIsMongoPrimary.mockReturnValue(true);
   });
@@ -296,14 +298,14 @@ describe('Task 1.0 — admin write ↔ public read round trip (DATABASE_PROVIDER
       status: 'published',
     })) as unknown as ActionResult;
     const bookId = String(created.data?._id);
-    const firstPublishedAt = bookStore.get(bookId)?.published_at;
+    const firstPublishedAt = mockBookStore.get(bookId)?.published_at;
     expect(firstPublishedAt).toBeInstanceOf(Date);
 
     await updateBookStatusAction(statusForm(bookId, 'draft'));
-    expect(bookStore.get(bookId)?.published_at).toEqual(firstPublishedAt);
+    expect(mockBookStore.get(bookId)?.published_at).toEqual(firstPublishedAt);
 
     await updateBookStatusAction(statusForm(bookId, 'published'));
-    expect(bookStore.get(bookId)?.published_at).toEqual(firstPublishedAt);
+    expect(mockBookStore.get(bookId)?.published_at).toEqual(firstPublishedAt);
   });
 
   it('accepts archived — the third status the edit form offers', async () => {
@@ -320,8 +322,8 @@ describe('Task 1.0 — admin write ↔ public read round trip (DATABASE_PROVIDER
 
     await updateBookStatusAction(statusForm(bookId, 'archived'));
     expect(mockSetBookStatusMongo).toHaveBeenCalledWith(bookId, 'archived');
-    expect(bookStore.get(bookId)?.status).toBe('archived');
-    expect(bookStore.get(bookId)?.visibility).not.toBe('public');
+    expect(mockBookStore.get(bookId)?.status).toBe('archived');
+    expect(mockBookStore.get(bookId)?.visibility).not.toBe('public');
     await expect(fetchBookForApi({ id: bookId })).resolves.toBeNull();
   });
 
