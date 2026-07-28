@@ -426,11 +426,12 @@ export async function fetchBookForApi(idOrSlug: {
 }): Promise<ApiBook | null> {
   if (isMongoPrimary()) {
     const book = idOrSlug.id
-      ? await getBookById(idOrSlug.id)
+      ? await getBookById(idOrSlug.id, { status: 'published', visibility: 'public' })
       : idOrSlug.slug
-        ? await getBookBySlug(idOrSlug.slug)
+        ? await getBookBySlug(idOrSlug.slug, { status: 'published' })
         : null;
     if (!book) return null;
+    if (book.visibility && book.visibility !== 'public') return null;
     const penName = book.author?.pen_name ?? null;
     return {
       id: String(book._id),
@@ -475,17 +476,48 @@ export async function fetchBookForApi(idOrSlug: {
     };
   }
 
+  if (!idOrSlug.id && !idOrSlug.slug) return null;
+
   // Public catalog client joins author under RLS-safe columns (PDP needs pen_name).
+  // SECURITY: this is a public read path — only ever expose published+public books.
   const { createPublicCatalogClient, PUBLIC_BOOK_SELECT } =
     await import('@/lib/supabase/public-queries');
   const supabase = createPublicCatalogClient();
-  let query = supabase.from('books').select(PUBLIC_BOOK_SELECT);
+  let query = supabase
+    .from('books')
+    .select(PUBLIC_BOOK_SELECT)
+    .eq('status', 'published')
+    .eq('visibility', 'public');
   if (idOrSlug.id) query = query.eq('id', idOrSlug.id);
   else if (idOrSlug.slug) query = query.eq('slug', idOrSlug.slug);
-  else return null;
   const { data, error } = await query.maybeSingle();
-  if (error) throw new Error(error.message);
-  return data as ApiBook | null;
+  if (!error && data) return data as ApiBook;
+
+  // Resilience fallback: the admin (service-role) client is the only consumer
+  // path that depends on SUPABASE_SERVICE_ROLE_KEY. If it errors or finds
+  // nothing while the RLS catalog can see the row (as observed in production,
+  // where /books lists books whose detail pages 404), retry with the standard
+  // server client. The author join may be RLS-restricted here — the PDP then
+  // shows 'Unknown Author' — but the page renders instead of 404ing.
+  try {
+    const rlsClient = await createClient();
+    let fallback = rlsClient
+      .from('books')
+      .select('*')
+      .eq('status', 'published')
+      .eq('visibility', 'public');
+    if (idOrSlug.id) fallback = fallback.eq('id', idOrSlug.id);
+    else fallback = fallback.eq('slug', idOrSlug.slug as string);
+    const { data: fallbackData, error: fallbackError } = await fallback.maybeSingle();
+    if (fallbackError) {
+      if (error) throw new Error(error.message);
+      return null;
+    }
+    return (fallbackData as ApiBook | null) ?? null;
+  } catch (fallbackThrow) {
+    if (error) throw new Error(error.message);
+    throw fallbackThrow;
+  }
 }
 
 /** Checkout summary — published+public only, with author display fields. */
