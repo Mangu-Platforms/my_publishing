@@ -1,7 +1,11 @@
 name: ci
 on:
   pull_request:
-    branches: [main]
+    # The launch programme stacks branches on unmerged PRs (audit/*, task/*),
+    # so CI must run for pull requests targeting those too. Without this a
+    # stacked PR reports "no checks for this commit" and nothing is verified
+    # before merge. Push events remain main-only.
+    branches: [main, 'audit/**', 'task/**']
   push:
     branches: [main]
 jobs:
