@@ -631,10 +631,10 @@ test.describe('Audio player', () => {
     await expect(seek).toHaveAttribute('aria-valuetext', /.+/);
   });
 
-  test.fixme('the seek bar is reachable and operable by keyboard', async ({ page }) => {
-    // A11Y-003: the seek bar is a <div role="slider"> with no tabindex and no
-    // keydown handler, so it is announced as a slider that keyboard users
-    // cannot reach or move. See ACCESSIBILITY_AUDIT.md for the fix.
+  test('the seek bar is reachable and operable by keyboard', async ({ page }) => {
+    // A11Y-003 (fixed): the seek bar now carries tabIndex={0} and an ARIA
+    // slider keydown handler (arrows / PageUp / PageDown / Home / End), so it
+    // is reachable and operable rather than announced-but-inert.
     const seek = page.locator('[data-testid="audio-player"] [role="slider"][aria-label="Seek"]');
     await expect(seek).toHaveAttribute('tabindex', '0');
     await seek.focus();
@@ -642,11 +642,10 @@ test.describe('Audio player', () => {
     expect(state.hasIndicator).toBe(true);
   });
 
-  test.fixme('player shortcuts do not swallow Space on unrelated controls', async ({ page }) => {
-    // A11Y-005: AudioPlayer installs a document-level keydown listener that
-    // calls preventDefault() on Space for any non-editable target once the
-    // listener has interacted with the player, which suppresses the native
-    // activation of every other button on the page.
+  test('player shortcuts do not swallow Space on unrelated controls', async ({ page }) => {
+    // A11Y-005 (fixed): the document-level keydown listener now yields to any
+    // focused control that owns the key itself — buttons, links, sliders,
+    // menu items — so Space activates the focused control, not playback.
     const player = page.locator('[data-testid="audio-player"]');
     await player.getByRole('button', { name: /^(play|pause) audio$/i }).focus();
     await page.keyboard.press('Enter');
@@ -803,14 +802,15 @@ test.describe('Dialogs', () => {
 // ===========================================================================
 
 test.describe('Contrast', () => {
-  test.fixme('critical controls and body copy meet WCAG 2.1 AA contrast', async ({ page }) => {
-    // A11Y-001 / A11Y-002. Two token-level defects make this fail today:
-    //   * `text-secondary` resolves to --secondary, a *surface* token. In the
-    //     default dark theme that is #1e293b on a #020817 page (1.37:1) and
-    //     1.00:1 on any `bg-muted` section — invisible.
-    //   * The default Button is #ffffff on --primary #ef4343 at 14px/500,
-    //     which is 3.78:1 against a 4.5:1 requirement.
-    // Both are token changes in app/globals.css; see ACCESSIBILITY_AUDIT.md.
+  test('critical controls and body copy meet WCAG 2.1 AA contrast', async ({ page }) => {
+    // A11Y-001 / A11Y-002 (fixed at the token layer in app/globals.css +
+    // tailwind.config.ts):
+    //   * `text-secondary` now resolves to --text-secondary, a foreground
+    //     token: 7.80:1 on the dark page background and 5.71:1 inside
+    //     `bg-muted` (5.11:1 / 4.66:1 in the light theme). `bg-secondary`
+    //     still resolves to the --secondary surface token.
+    //   * Solid primary buttons fill with --primary-strong, 4.87:1 with
+    //     white, instead of --primary at 3.78:1.
     const bookHref = await firstBookHref(page);
     test.skip(bookHref === null, 'No published books in this environment.');
     await page.goto(bookHref as string);
@@ -843,9 +843,14 @@ test.describe('Contrast', () => {
 
 test.describe('Bypass blocks', () => {
   test.fixme('a skip link moves focus to the main landmark', async ({ page }) => {
-    // A11Y-007: there is no skip link, so every keyboard user tabs through the
-    // full header (menu, brand, six nav items, search, user menu) on every page
-    // load. WCAG 2.1 2.4.1, Level A. See ACCESSIBILITY_AUDIT.md.
+    // A11Y-007: half fixed. components/shared/Header.tsx now renders a
+    // "Skip to main content" link, hidden until focused, pointing at
+    // #main-content — but app/layout.tsx still renders a bare
+    // <main className="flex-1">. Enable this once that becomes
+    // <main id="main-content" tabIndex={-1} className="flex-1">: without the
+    // id the fragment resolves to nothing, and without tabindex=-1 following
+    // it moves the scroll position but not focus, so the assertion below
+    // cannot pass. WCAG 2.1 2.4.1, Level A.
     await page.goto('/books');
     await page.locator('body').press('Tab');
     const skip = page.getByRole('link', { name: /skip to (main )?content/i });
@@ -912,11 +917,10 @@ test.describe('Admin book form (credentialed)', () => {
     await expect(form.getByRole('alert').first()).toBeVisible();
   });
 
-  test.fixme('field errors are associated with the field they describe', async ({ page }) => {
-    // A11Y-008: FieldError renders <p role="alert"> with no id, and no admin
-    // input sets aria-describedby or aria-invalid. A screen-reader user hears
-    // "Title is required" once and then cannot tell which of ~20 fields it
-    // belongs to. app/(auth)/login/LoginForm.tsx already does this correctly.
+  test('field errors are associated with the field they describe', async ({ page }) => {
+    // A11Y-008 (fixed): FieldError renders an id'd <p role="alert"> and every
+    // control in BookForm sets aria-invalid + aria-describedby pointing at it,
+    // matching the pattern in app/(auth)/login/LoginForm.tsx.
     const form = page.getByRole('form', { name: /create book form/i });
     await form.getByRole('button', { name: /create book/i }).click();
 
