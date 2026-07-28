@@ -5,36 +5,12 @@ import { betterAuthRequestPasswordReset } from '@/lib/auth/better-auth-actions';
 import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { createClient } from '@/lib/supabase/server';
 import { passwordResetRateLimit } from '@/lib/utils/auth-rate-limit';
+import { normalizeAuthErrorMessage, redactAuthDiagnostic } from '@/lib/auth/error-messages';
+import { resolveAuthOriginFromHeaders } from '@/lib/auth/origin';
 
-function normalizeOrigin(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  return value.trim().replace(/\/+$/, '');
-}
-
+/** Task 1.9: same host-header-injection fix as the register flow. */
 async function resolveAuthOrigin() {
-  const headersList = await headers();
-  const host = headersList.get('x-forwarded-host') || headersList.get('host');
-  const proto = headersList.get('x-forwarded-proto') || 'http';
-  const requestOrigin = host ? `${proto}://${host.split(',')[0].trim()}` : null;
-  const configuredOrigin = normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL);
-  const vercelUrl = normalizeOrigin(process.env.VERCEL_URL);
-
-  if (requestOrigin) {
-    return normalizeOrigin(requestOrigin)!;
-  }
-
-  if (configuredOrigin) {
-    return configuredOrigin;
-  }
-
-  if (vercelUrl) {
-    return `https://${vercelUrl.replace(/^https?:\/\//, '')}`;
-  }
-
-  return 'http://localhost:3001';
+  return resolveAuthOriginFromHeaders(await headers());
 }
 
 function toFriendlyResetError(message: string) {
@@ -72,7 +48,7 @@ export async function resetPassword(formData: FormData) {
   if (isBetterAuthPrimary()) {
     const ba = await betterAuthRequestPasswordReset(normalizedEmail);
     if (ba.error) {
-      return { error: toFriendlyResetError(ba.error) };
+      return { error: toFriendlyResetError(normalizeAuthErrorMessage(ba.error)) };
     }
     return { success: true };
   }
@@ -85,10 +61,14 @@ export async function resetPassword(formData: FormData) {
     });
 
     if (error) {
-      return { error: toFriendlyResetError(error.message) };
+      console.error('[auth] Password reset request rejected:', redactAuthDiagnostic(error));
+      return { error: toFriendlyResetError(normalizeAuthErrorMessage(error)) };
     }
   } catch (error) {
-    console.error('Unexpected error requesting password reset:', error);
+    console.error(
+      '[auth] Unexpected error requesting password reset:',
+      redactAuthDiagnostic(error)
+    );
     return { error: 'We could not start the password reset request. Please try again.' };
   }
 
