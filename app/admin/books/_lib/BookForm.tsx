@@ -119,13 +119,29 @@ function optionalInt(raw: string): number | undefined {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-function FieldError({ message }: { message?: string }) {
+function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
-    <p role="alert" className="mt-1 text-sm text-red-500">
+    <p id={id} role="alert" className="mt-1 text-sm text-red-500">
       {message}
     </p>
   );
+}
+
+/**
+ * Wires a control to its error message (A11Y-008, WCAG 1.3.1 / 3.3.1 / 4.1.2).
+ *
+ * WHY: rendering the message under the input is a sighted-only relationship.
+ * A screen-reader user hears it announced once and then tabs back through
+ * roughly twenty fields with no way to tell which one it belonged to.
+ * `app/(auth)/login/LoginForm.tsx` is the pattern this follows.
+ */
+function errorProps(
+  field: string,
+  message?: string
+): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
+  if (!message) return {};
+  return { 'aria-invalid': true, 'aria-describedby': `${field}-error` };
 }
 
 export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps) {
@@ -312,18 +328,20 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
           <Label htmlFor="title">Title *</Label>
           <Input
             id="title"
+            {...errorProps('title', visibleErrors.title)}
             name="title"
             value={values.title}
             onChange={(event) => setField('title', event.target.value)}
             className="mt-1"
           />
-          <FieldError message={visibleErrors.title} />
+          <FieldError id="title-error" message={visibleErrors.title} />
         </div>
 
         <div>
           <Label htmlFor="slug">URL slug{mode === 'edit' ? ' *' : ''}</Label>
           <Input
             id="slug"
+            {...errorProps('slug', visibleErrors.slug)}
             name="slug"
             value={values.slug}
             onChange={(event) => setField('slug', event.target.value)}
@@ -332,20 +350,21 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
             }
             className="mt-1"
           />
-          <FieldError message={visibleErrors.slug} />
+          <FieldError id="slug-error" message={visibleErrors.slug} />
         </div>
 
         <div>
           <Label htmlFor="description">Description</Label>
           <Textarea
             id="description"
+            {...errorProps('description', visibleErrors.description)}
             name="description"
             rows={6}
             value={values.description}
             onChange={(event) => setField('description', event.target.value)}
             className="mt-1"
           />
-          <FieldError message={visibleErrors.description} />
+          <FieldError id="description-error" message={visibleErrors.description} />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -355,7 +374,7 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
               value={authorValue}
               onValueChange={(value) => setField('author_id', value === NO_AUTHOR ? null : value)}
             >
-              <SelectTrigger id="author_id">
+              <SelectTrigger id="author_id" {...errorProps('author_id', visibleErrors.author_id)}>
                 <SelectValue placeholder="Select an author" />
               </SelectTrigger>
               <SelectContent>
@@ -367,19 +386,20 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
                 ))}
               </SelectContent>
             </Select>
-            <FieldError message={visibleErrors.author_id} />
+            <FieldError id="author_id-error" message={visibleErrors.author_id} />
           </div>
 
           <div>
             <Label htmlFor="genre">Genre *</Label>
             <Input
               id="genre"
+              {...errorProps('genre', visibleErrors.genre)}
               name="genre"
               value={values.genre}
               onChange={(event) => setField('genre', event.target.value)}
               className="mt-1"
             />
-            <FieldError message={visibleErrors.genre} />
+            <FieldError id="genre-error" message={visibleErrors.genre} />
           </div>
         </div>
 
@@ -388,6 +408,7 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
             <Label htmlFor="price">Price *</Label>
             <Input
               id="price"
+              {...errorProps('price', visibleErrors.price)}
               name="price"
               inputMode="decimal"
               value={values.price}
@@ -395,7 +416,7 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
               placeholder="12.99"
               className="mt-1"
             />
-            <FieldError message={visibleErrors.price} />
+            <FieldError id="price-error" message={visibleErrors.price} />
           </div>
           <div>
             <Label htmlFor="currency">Currency</Label>
@@ -408,12 +429,13 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
             <Label htmlFor="isbn">ISBN</Label>
             <Input
               id="isbn"
+              {...errorProps('isbn', visibleErrors.isbn)}
               name="isbn"
               value={values.isbn}
               onChange={(event) => setField('isbn', event.target.value)}
               className="mt-1"
             />
-            <FieldError message={visibleErrors.isbn} />
+            <FieldError id="isbn-error" message={visibleErrors.isbn} />
           </div>
         </div>
 
@@ -440,25 +462,27 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
             <Label htmlFor="published_at">Publication date</Label>
             <Input
               id="published_at"
+              {...errorProps('published_at', visibleErrors.published_at)}
               name="published_at"
               type="date"
               value={values.published_at}
               onChange={(event) => setField('published_at', event.target.value)}
               className="mt-1"
             />
-            <FieldError message={visibleErrors.published_at} />
+            <FieldError id="published_at-error" message={visibleErrors.published_at} />
           </div>
           <div>
             <Label htmlFor="trailer_vimeo_id">Trailer (Vimeo ID)</Label>
             <Input
               id="trailer_vimeo_id"
+              {...errorProps('trailer_vimeo_id', visibleErrors.trailer_vimeo_id)}
               name="trailer_vimeo_id"
               value={values.trailer_vimeo_id}
               onChange={(event) => setField('trailer_vimeo_id', event.target.value)}
               placeholder="76979871"
               className="mt-1"
             />
-            <FieldError message={visibleErrors.trailer_vimeo_id} />
+            <FieldError id="trailer_vimeo_id-error" message={visibleErrors.trailer_vimeo_id} />
           </div>
         </div>
 
@@ -467,6 +491,7 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
             <Label htmlFor="page_count">Page count</Label>
             <Input
               id="page_count"
+              {...errorProps('page_count', visibleErrors.page_count)}
               name="page_count"
               type="number"
               min="0"
@@ -474,12 +499,13 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
               onChange={(event) => setField('page_count', event.target.value)}
               className="mt-1"
             />
-            <FieldError message={visibleErrors.page_count} />
+            <FieldError id="page_count-error" message={visibleErrors.page_count} />
           </div>
           <div>
             <Label htmlFor="word_count">Word count</Label>
             <Input
               id="word_count"
+              {...errorProps('word_count', visibleErrors.word_count)}
               name="word_count"
               type="number"
               min="0"
@@ -487,7 +513,7 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
               onChange={(event) => setField('word_count', event.target.value)}
               className="mt-1"
             />
-            <FieldError message={visibleErrors.word_count} />
+            <FieldError id="word_count-error" message={visibleErrors.word_count} />
           </div>
         </div>
       </section>
@@ -521,6 +547,7 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
             <Label htmlFor={field}>{RETAILER_LABELS[field]}</Label>
             <Input
               id={field}
+              {...errorProps(field, visibleErrors[field])}
               name={field}
               type="url"
               value={values[field]}
@@ -528,7 +555,7 @@ export function BookForm({ mode, bookId, authors, initialValues }: BookFormProps
               placeholder="https://…"
               className="mt-1"
             />
-            <FieldError message={visibleErrors[field]} />
+            <FieldError id={`${field}-error`} message={visibleErrors[field]} />
           </div>
         ))}
       </section>
