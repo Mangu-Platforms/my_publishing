@@ -7,12 +7,18 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { registerUser } from './actions';
+import { normalizeAuthErrorMessage } from '@/lib/auth/error-messages';
+import {
+  PASSWORD_HELP_TEXT,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_MIN_MESSAGE,
+} from '@/lib/auth/password-policy';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 
 const registerSchema = z
   .object({
     email: z.string().email('Invalid email address'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    password: z.string().min(PASSWORD_MIN_LENGTH, PASSWORD_MIN_MESSAGE),
     confirmPassword: z.string(),
     fullName: z.string().min(2, 'Full name is required'),
   })
@@ -49,7 +55,7 @@ export function RegisterForm() {
       const result = await registerUser(formData);
 
       if (result?.error) {
-        setError(result.error);
+        setError(normalizeAuthErrorMessage(result.error));
         setIsLoading(false);
       } else if (result?.needsVerification && result.verificationEmail) {
         // No session yet — the user must confirm their email first.
@@ -135,14 +141,18 @@ export function RegisterForm() {
           type="password"
           autoComplete="new-password"
           placeholder="••••••••"
-          aria-describedby={errors.password ? 'password-error' : undefined}
+          aria-describedby={errors.password ? 'password-error' : 'password-help'}
           aria-invalid={!!errors.password}
           {...register('password')}
           disabled={isLoading}
         />
-        {errors.password && (
+        {errors.password ? (
           <p id="password-error" role="alert" className="mt-1 text-sm text-red-500">
             {errors.password.message}
+          </p>
+        ) : (
+          <p id="password-help" className="mt-1 text-sm text-secondary">
+            {PASSWORD_HELP_TEXT}
           </p>
         )}
       </div>
