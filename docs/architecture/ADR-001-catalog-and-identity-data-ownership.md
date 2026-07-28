@@ -222,7 +222,7 @@ Verified in the clone:
 | All six retailer URL fields **omitted entirely** from the Mongo return object | `lib/data/books.ts:436–476` |
 | `discount_price` hardcoded `null` | `lib/data/books.ts:443` |
 | `listAudiobooks()` returns `[]` | `lib/data/books.ts:691–694` |
-| `fetchAudiobookById()` returns `null` | `libly/data/books.ts:741–744` |
+| `fetchAudiobookById()` returns `null` | `lib/data/books.ts:741–744` |
 
 Root cause: the Mongo `Book` interface (`types/mongo.ts:43–62`) has no `isbn`, no `is_featured`, no
 `trailer_vimeo_id`, no retailer URLs and no audio fields, and `lib/mongo-books.ts:81–99` never writes
