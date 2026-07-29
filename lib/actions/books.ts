@@ -22,7 +22,7 @@ import {
 } from '@/lib/mongo-books';
 import { getBookById } from '@/lib/mongo-queries';
 import { recordAudit } from '@/lib/audit';
-import { setBookAssets } from '@/lib/data/book-assets';
+import { setBookAssets, type BookAssetPatch } from '@/lib/data/book-assets';
 import {
   RETAILER_URL_FIELDS,
   nullableText,
@@ -30,6 +30,8 @@ import {
   slugifyBookTitle,
   visibilityForStatus,
   type AdminBookStatus,
+  type ContentType,
+  type RetailerUrlField,
 } from '@/lib/books/fields';
 
 // Rate limiting
@@ -101,13 +103,105 @@ const audit = async (
  * drop the field, or remap it onto a real column.
  */
 
+/*
+ * ADMIN INPUT CONTRACT — every field `app/admin/books/_lib/BookForm.tsx` posts.
+ *
+ * The form builds ONE named payload object for create and edit. A named object
+ * is not a fresh object literal, so TypeScript's excess-property check never
+ * fires on it: a key missing from the types below does not fail to compile, it
+ * is silently dropped somewhere between the browser and the database. That is
+ * exactly how `author_id`, `is_featured`, `trailer_vimeo_id`, the audio fields,
+ * the ISBN, the page/word counts and all six retailer URLs stopped
+ * round-tripping. Every key here is therefore load-bearing.
+ *
+ * `published_at` is deliberately ABSENT. It records the FIRST transition to
+ * published and is owned by the write path on both providers; accepting it from
+ * form input would let the admin surface restamp or erase a publication date.
+ */
+
+/** Assets are never plain `books` columns — `setBookAssets` owns all six. */
+type AdminBookAssetInput = {
+  cover_url?: string | null;
+  epub_url?: string | null;
+  audio_url?: string | null;
+  audio_toc?: unknown;
+  audio_narrator?: string | null;
+  audio_duration_seconds?: number | null;
+};
+
+type AdminBookInput = AdminBookAssetInput &
+  Partial<Record<RetailerUrlField, string | null>> & {
+    title?: string;
+    slug?: string;
+    description?: string;
+    genre?: string;
+    price?: number;
+    isbn?: string;
+    content_type?: ContentType;
+    status?: AdminBookStatus;
+    author_id?: string | null;
+    is_featured?: boolean;
+    trailer_vimeo_id?: string | null;
+    page_count?: number;
+    word_count?: number;
+  };
+
+/**
+ * Collect only the retailer keys the caller actually supplied.
+ *
+ * Built explicitly rather than casting the whole input to
+ * `Record<string, string | null | undefined>`: the admin input carries numbers
+ * and booleans too, so that cast was both unsound and unnecessary.
+ */
+function retailerInputFrom(input: AdminBookInput): Record<string, string | null | undefined> {
+  const values: Record<string, string | null | undefined> = {};
+  for (const field of RETAILER_URL_FIELDS) {
+    if (field in input) values[field] = input[field];
+  }
+  return values;
+}
+
+/** The asset subset of an admin payload, normalised, keyed only where supplied. */
+function assetPatchFrom(input: AdminBookAssetInput): BookAssetPatch {
+  const patch: BookAssetPatch = {};
+  if (input.cover_url !== undefined) patch.cover_url = nullableText(input.cover_url);
+  if (input.epub_url !== undefined) patch.epub_url = nullableText(input.epub_url);
+  if (input.audio_url !== undefined) patch.audio_url = nullableText(input.audio_url);
+  if (input.audio_toc !== undefined) patch.audio_toc = input.audio_toc;
+  if (input.audio_narrator !== undefined) patch.audio_narrator = nullableText(input.audio_narrator);
+  if (input.audio_duration_seconds !== undefined) {
+    patch.audio_duration_seconds = input.audio_duration_seconds;
+  }
+  return patch;
+}
+
+/**
+ * Route every asset reference through the one asset writer.
+ *
+ * `cover_url` is a real `books` column on Supabase and a plain field on the
+ * Mongo document, so it USED to be written inline next to the metadata — which
+ * skipped `setBookAssets`'s server-side https re-validation, the only check
+ * standing between a bypassed form and a published book pointing at a dead
+ * link. EPUB/audio have no `books` column at all (they live on
+ * `book_content`), so they always had to go here.
+ */
+async function writeBookAssets(
+  bookId: string,
+  input: AdminBookAssetInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const patch = assetPatchFrom(input);
+  if (Object.keys(patch).length === 0) return { ok: true };
+  const result = await setBookAssets(bookId, patch);
+  if (!result.ok) {
+    console.error(`[books] asset write failed for ${bookId}: ${result.error}`);
+  }
+  return result;
+}
+
 /** EPUBs are assets, not book columns — `book_content.epub_url` on Supabase. */
 const writeEpubAsset = async (bookId: string, epubUrl: string | null | undefined) => {
   if (epubUrl === undefined) return;
-  const result = await setBookAssets(bookId, { epub_url: nullableText(epubUrl) });
-  if (!result.ok) {
-    console.error(`[books] epub asset write failed for ${bookId}: ${result.error}`);
-  }
+  await writeBookAssets(bookId, { epub_url: epubUrl });
 };
 
 export async function createBook(input: CreateBookInput) {
@@ -395,30 +489,11 @@ export async function updateBook(bookId: string, input: UpdateBookInput) {
  * `subtitle` is deliberately absent: `books.subtitle` exists in no migration
  * and new migrations are blocked until Task 3.6, so it is removed from the
  * admin surface rather than written to a column that is not there.
+ *
+ * The input type is the WHOLE admin form payload (see AdminBookInput). A
+ * narrower type here does not reject the extra keys, it drops them.
  */
-export async function updateBookAdmin(
-  bookId: string,
-  input: {
-    title?: string;
-    description?: string;
-    content_type?: 'book' | 'comic' | 'paper';
-    slug?: string;
-    price?: number;
-    isbn?: string;
-    genre?: string;
-    page_count?: number;
-    word_count?: number;
-    status?: AdminBookStatus;
-    cover_url?: string | null;
-    epub_url?: string | null;
-    amazon_url?: string | null;
-    kindle_url?: string | null;
-    apple_books_url?: string | null;
-    audible_url?: string | null;
-    barnes_noble_url?: string | null;
-    google_play_books_url?: string | null;
-  }
-) {
+export async function updateBookAdmin(bookId: string, input: AdminBookInput) {
   try {
     const supabase = await createClient();
 
@@ -447,7 +522,7 @@ export async function updateBookAdmin(
     // Retailer links are external by contract: reject anything the PDP could
     // never render rather than storing a dead link.
     const { values: retailerUrls, issues } = normalizeUrlFields(
-      input as Record<string, string | null | undefined>,
+      retailerInputFrom(input),
       RETAILER_URL_FIELDS
     );
     if (issues.length > 0) {
@@ -472,7 +547,11 @@ export async function updateBookAdmin(
         ...(input.isbn !== undefined ? { isbn: nullableText(input.isbn) } : {}),
         ...(input.page_count !== undefined ? { page_count: input.page_count } : {}),
         ...(input.word_count !== undefined ? { word_count: input.word_count } : {}),
-        ...(input.cover_url !== undefined ? { cover_url: nullableText(input.cover_url) } : {}),
+        ...(input.author_id !== undefined ? { author_id: nullableText(input.author_id) } : {}),
+        ...(input.is_featured !== undefined ? { is_featured: input.is_featured } : {}),
+        ...(input.trailer_vimeo_id !== undefined
+          ? { trailer_vimeo_id: nullableText(input.trailer_vimeo_id) }
+          : {}),
         ...retailerUrls,
       });
 
@@ -484,7 +563,8 @@ export async function updateBookAdmin(
         };
       }
 
-      await writeEpubAsset(bookId, input.epub_url);
+      // Assets go through setBookAssets on BOTH providers, never inline.
+      const assets = await writeBookAssets(bookId, input);
       await audit(user.id, 'UPDATE', bookId, {
         resource_type: 'books',
         changes: Object.keys(input),
@@ -497,6 +577,9 @@ export async function updateBookAdmin(
       revalidateTag('featured-books');
       revalidateBooks();
 
+      if (!assets.ok) {
+        return { success: false, error: assets.error, code: 'VALIDATION_ERROR' };
+      }
       return { success: true, data: result.book, code: 'BOOK_UPDATED' };
     }
 
@@ -506,7 +589,7 @@ export async function updateBookAdmin(
 
     const { data: existing } = await admin
       .from('books')
-      .select('id, status, published_at')
+      .select('id, status, published_at, featured_at')
       .eq('id', bookId)
       .maybeSingle();
 
@@ -515,6 +598,7 @@ export async function updateBookAdmin(
     }
 
     // Only write keys that were actually provided, and only real columns.
+    // `cover_url` is absent on purpose — it goes through setBookAssets below.
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (input.title !== undefined) updates.title = input.title;
     if (input.description !== undefined) updates.description = nullableText(input.description);
@@ -525,8 +609,26 @@ export async function updateBookAdmin(
     if (input.genre !== undefined) updates.genre = nullableText(input.genre);
     if (input.page_count !== undefined) updates.page_count = input.page_count;
     if (input.word_count !== undefined) updates.word_count = input.word_count;
-    if (input.cover_url !== undefined) updates.cover_url = nullableText(input.cover_url);
+    if (input.author_id !== undefined) updates.author_id = nullableText(input.author_id);
+    if (input.trailer_vimeo_id !== undefined) {
+      updates.trailer_vimeo_id = nullableText(input.trailer_vimeo_id);
+    }
     Object.assign(updates, retailerUrls);
+
+    // `books.featured_at` is the sort key of the featured rail on BOTH
+    // providers (idx_books_featured / getFeaturedBooks order by it, and the
+    // Mongo rail sorts { featured_at: -1 }). Flagging is_featured without
+    // stamping it sorts the book behind every already-stamped title, so the
+    // flag is set and the timestamp follows it — stamped on the first feature,
+    // never restamped, cleared when the flag comes off.
+    if (input.is_featured !== undefined) {
+      updates.is_featured = input.is_featured;
+      if (!input.is_featured) {
+        updates.featured_at = null;
+      } else if (!existing.featured_at) {
+        updates.featured_at = new Date().toISOString();
+      }
+    }
 
     if (input.status !== undefined) {
       updates.status = input.status;
@@ -566,7 +668,7 @@ export async function updateBookAdmin(
 
     if (error) throw error;
 
-    await writeEpubAsset(bookId, input.epub_url);
+    const assets = await writeBookAssets(bookId, input);
 
     await audit(user.id, 'UPDATE', bookId, {
       resource_type: 'books',
@@ -580,6 +682,11 @@ export async function updateBookAdmin(
     revalidateTag('featured-books');
     revalidateBooks(); // PERF-PHASE2-2
 
+    // The metadata is saved and live; a rejected asset reference is still a
+    // failure the operator has to see rather than a silently skipped field.
+    if (!assets.ok) {
+      return { success: false, error: assets.error, code: 'VALIDATION_ERROR' };
+    }
     return { success: true, data, code: 'BOOK_UPDATED' };
   } catch (error) {
     console.error('Admin update book error:', error);
@@ -598,19 +705,12 @@ export async function updateBookAdmin(
  * service-role client after the role check passes.
  *
  * Task 1.0: the write branches on DATABASE_PROVIDER; auth stays on Supabase.
+ *
+ * Takes the same whole-form payload as updateBookAdmin (see AdminBookInput):
+ * create and edit render ONE component, so anything create refuses to accept is
+ * a field the operator can fill in and watch disappear.
  */
-export async function createBookAdmin(input: {
-  title: string;
-  slug?: string;
-  description?: string;
-  genre: string;
-  price?: number;
-  status?: AdminBookStatus;
-  content_type?: 'book' | 'comic' | 'paper';
-  author_id?: string | null;
-  cover_url?: string | null;
-  epub_url?: string | null;
-}) {
+export async function createBookAdmin(input: AdminBookInput & { title: string; genre: string }) {
   try {
     const supabase = await createClient();
 
@@ -653,6 +753,21 @@ export async function createBookAdmin(input: {
     }
 
     const status: AdminBookStatus = input.status || 'draft';
+    const isFeatured = input.is_featured ?? false;
+
+    // Same external-URL contract as the edit path — a retailer link that the
+    // PDP could never render is rejected at creation too, not just on edit.
+    const { values: retailerUrls, issues } = normalizeUrlFields(
+      retailerInputFrom(input),
+      RETAILER_URL_FIELDS
+    );
+    if (issues.length > 0) {
+      return {
+        success: false,
+        error: `${issues[0].field}: ${issues[0].message}`,
+        code: 'VALIDATION_ERROR',
+      };
+    }
 
     if (isMongoPrimary()) {
       const result = await createBookAdminMongo({
@@ -664,7 +779,12 @@ export async function createBookAdmin(input: {
         status,
         content_type: input.content_type || 'book',
         author_id: input.author_id || null,
-        cover_url: nullableText(input.cover_url),
+        isbn: nullableText(input.isbn),
+        page_count: input.page_count ?? null,
+        word_count: input.word_count ?? null,
+        is_featured: isFeatured,
+        trailer_vimeo_id: nullableText(input.trailer_vimeo_id),
+        ...retailerUrls,
       });
 
       if ('error' in result) {
@@ -676,7 +796,7 @@ export async function createBookAdmin(input: {
       }
 
       const bookId = String(result.book._id);
-      await writeEpubAsset(bookId, input.epub_url);
+      const assets = await writeBookAssets(bookId, input);
       await audit(user.id, 'CREATE', bookId, {
         resource_type: 'books',
         title: result.book.title,
@@ -689,6 +809,9 @@ export async function createBookAdmin(input: {
       revalidateTag('featured-books');
       revalidateBooks();
 
+      if (!assets.ok) {
+        return { success: false, error: assets.error, code: 'VALIDATION_ERROR' };
+      }
       return { success: true, data: result.book, code: 'BOOK_CREATED' };
     }
 
@@ -716,15 +839,24 @@ export async function createBookAdmin(input: {
         visibility: visibilityForStatus(status),
         content_type: input.content_type || 'book',
         author_id: input.author_id || null,
-        cover_url: nullableText(input.cover_url),
+        isbn: nullableText(input.isbn),
+        page_count: input.page_count ?? null,
+        word_count: input.word_count ?? null,
+        trailer_vimeo_id: nullableText(input.trailer_vimeo_id),
+        is_featured: isFeatured,
+        // Server-owned timestamps: both are stamped by the write path only.
+        featured_at: isFeatured ? new Date().toISOString() : null,
         published_at: status === 'published' ? new Date().toISOString() : null,
+        ...retailerUrls,
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    await writeEpubAsset(data.id, input.epub_url);
+    // cover/EPUB/audio are written by setBookAssets, never inline: it is the
+    // single place the https contract is enforced server-side.
+    const assets = await writeBookAssets(data.id, input);
 
     await audit(user.id, 'CREATE', data.id, {
       resource_type: 'books',
@@ -738,6 +870,9 @@ export async function createBookAdmin(input: {
     revalidateTag('featured-books');
     revalidateBooks(); // PERF-PHASE2-2
 
+    if (!assets.ok) {
+      return { success: false, error: assets.error, code: 'VALIDATION_ERROR' };
+    }
     return { success: true, data, code: 'BOOK_CREATED' };
   } catch (error) {
     console.error('Admin create book error:', error);

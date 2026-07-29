@@ -56,6 +56,9 @@ export interface AudioPlayerProps {
 }
 
 const SKIP_STEP_SEC = 15;
+/** Seek-bar keyboard steps (ARIA slider pattern): arrows nudge, PageUp/Down jump. */
+const SEEK_KEY_STEP_SEC = 5;
+const SEEK_KEY_PAGE_SEC = 60;
 
 export function AudioPlayer({
   src,
@@ -124,16 +127,31 @@ export function AudioPlayer({
   useEffect(() => {
     if (!enableKeyboard) return;
 
-    const isEditableTarget = (target: EventTarget | null): boolean => {
+    // WHY: this listener is on `document`, so it must never consume a key the
+    // focused control needs — Space and Enter activate buttons and links,
+    // arrows drive sliders, selects, tabs and menus. Before this guard, one
+    // interaction with the player left Space calling preventDefault() on every
+    // button on the site (A11Y-005), including the player's own sleep-timer
+    // trigger and, now, its seek bar.
+    const controlOwnsItsKeys = (target: EventTarget | null): boolean => {
       if (!(target instanceof HTMLElement)) return false;
-      const tag = target.tagName;
-      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+      if (target.isContentEditable) return true;
+      return (
+        target.closest(
+          'a[href], button, input, textarea, select, summary, [contenteditable=""], ' +
+            '[contenteditable="true"], [tabindex]:not([tabindex="-1"]), [role="button"], ' +
+            '[role="link"], [role="checkbox"], [role="radio"], [role="switch"], ' +
+            '[role="slider"], [role="spinbutton"], [role="tab"], [role="menuitem"], ' +
+            '[role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], ' +
+            '[role="textbox"], [role="combobox"]'
+        ) !== null
+      );
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (!interactedRef.current) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (isEditableTarget(event.target)) return;
+      if (controlOwnsItsKeys(event.target)) return;
       // With a shared engine, only drive the active track.
       if (usingShared && !isActiveTrack) return;
       if (!engine.track) return;
@@ -197,6 +215,39 @@ export function AudioPlayer({
   const sleep = isActiveTrack ? engine.sleepTimer : null;
   const resumePosition = isActiveTrack ? engine.resumePosition : null;
 
+  // Keyboard operation of the seek bar (A11Y-003). The element already claimed
+  // role="slider" to assistive tech while being unfocusable and inert, which is
+  // worse than not claiming it. Mouse/touch seeking is unchanged below.
+  const onSeekBarKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isActiveTrack || shownDuration <= 0) return;
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        engine.seekBy(-SEEK_KEY_STEP_SEC);
+        break;
+      case 'ArrowRight':
+      case 'ArrowUp':
+        engine.seekBy(SEEK_KEY_STEP_SEC);
+        break;
+      case 'PageDown':
+        engine.seekBy(-SEEK_KEY_PAGE_SEC);
+        break;
+      case 'PageUp':
+        engine.seekBy(SEEK_KEY_PAGE_SEC);
+        break;
+      case 'Home':
+        engine.seekTo(0);
+        break;
+      case 'End':
+        engine.seekTo(shownDuration);
+        break;
+      default:
+        // Everything else — Tab, Escape, browser shortcuts — is left alone.
+        return;
+    }
+    event.preventDefault();
+  };
+
   const onSeekBarPointer = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!isActiveTrack || shownDuration <= 0) return;
     const bar = event.currentTarget;
@@ -255,10 +306,17 @@ export function AudioPlayer({
             )}
             role="slider"
             aria-label="Seek"
+            aria-orientation="horizontal"
             aria-valuemin={0}
             aria-valuemax={Math.round(shownDuration)}
             aria-valuenow={Math.round(shownTime)}
             aria-valuetext={`${formatTime(shownTime)} of ${formatTime(shownDuration)}`}
+            // Always in the tab order: a slider that drops out when its track is
+            // not loaded is a focus stop that appears and disappears under the
+            // user. The handler no-ops until there is something to seek. The
+            // focus ring is the global :focus-visible rule in app/globals.css.
+            tabIndex={0}
+            onKeyDown={onSeekBarKeyDown}
             onPointerDown={onSeekBarPointer}
           >
             {/* Download progress (buffered) */}

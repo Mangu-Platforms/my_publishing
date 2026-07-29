@@ -27,6 +27,7 @@ import {
   validateEpubFile,
   type AdminBookFormValues,
 } from '@/app/admin/books/_lib/book-validation';
+import { RETAILER_URL_FIELDS } from '@/lib/books/fields';
 
 jest.mock('@/lib/server-only-guard', () => ({}));
 
@@ -164,6 +165,51 @@ describe('server and client run the same rule set', () => {
     ]) {
       expect(read(file)).not.toMatch(/const\s+(BLOCKERS|REQUIRED_FIELDS)\s*=/);
     }
+  });
+
+  /**
+   * The seam this guards: the form posts ONE named payload object, and a named
+   * object is not a fresh object literal, so TypeScript's excess-property check
+   * never fires on it. A field the action's parameter type does not declare
+   * therefore compiles cleanly and is dropped between the browser and the
+   * database — silently, on both providers. Type-checking cannot catch this;
+   * only a field-by-field comparison can.
+   */
+  it('every field the shared form posts is declared by the write actions', () => {
+    const form = read('app/admin/books/_lib/BookForm.tsx');
+    const actions = read('lib/actions/books.ts');
+
+    const payload = form.match(/type BookWritePayload = \{([\s\S]*?)\n\};/)?.[1];
+    expect(payload).toBeDefined();
+    const posted = [...(payload as string).matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]);
+    // Sanity check on the extraction itself, not on the field list.
+    expect(posted.length).toBeGreaterThan(15);
+
+    const start = actions.indexOf('type AdminBookAssetInput');
+    const end = actions.indexOf('function retailerInputFrom');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const accepted = actions.slice(start, end);
+
+    for (const field of posted) {
+      // Retailer URLs are declared once, via Partial<Record<RetailerUrlField>>.
+      if ((RETAILER_URL_FIELDS as readonly string[]).includes(field)) continue;
+      expect(accepted).toMatch(new RegExp(`\\b${field}\\??:`));
+    }
+  });
+
+  it('published_at is write-path-owned: never posted, never accepted', () => {
+    // It records the FIRST publication. A form that could set it could also
+    // erase it, and the read-only input says so to the operator.
+    const form = read('app/admin/books/_lib/BookForm.tsx');
+    const payload = form.match(/type BookWritePayload = \{([\s\S]*?)\n\};/)?.[1] ?? '';
+    expect(payload).not.toMatch(/published_at/);
+    expect(form).toMatch(/id="published_at"[\s\S]*?readOnly/);
+
+    const actions = read('lib/actions/books.ts');
+    const start = actions.indexOf('type AdminBookAssetInput');
+    const end = actions.indexOf('function retailerInputFrom');
+    expect(actions.slice(start, end)).not.toMatch(/published_at/);
   });
 
   it('subtitle is gone from the admin surface', () => {
