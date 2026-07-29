@@ -1,11 +1,15 @@
 # Human Actions — MANGU Publishers launch
 
 **For:** Renee · **Compiled:** 2026-07-28 · **Base:** `audit/2026-07-28-fixes` @ `23e50c1`
+**Revised:** 2026-07-29 after the CI verification pass — every original programme branch is
+now green through `npm run build` (runs #894–#913, `PROGRAMME_STATUS.md` §1), #358 is merged
+into #356, and PR #362 (accessibility remediation) exists. Done items are kept and marked
+**DONE** with evidence rather than deleted; IDs are stable and nothing is renumbered.
 **Source:** every "Needs Renee" / "Needs a decision" / "Requires human" section across PRs
-#350–#360, deduplicated into one entry each.
+#350–#362, deduplicated into one entry each.
 **Companions:** `docs/launch/PROGRAMME_STATUS.md` · `docs/launch/EVIDENCE_PACKET.md`
 
-**68 actions.** A: 8 · B: 22 · C: 18 · D: 9 · E: 11.
+**69 actions — 2 DONE (HA-A1, HA-D5), 67 open.** A: 9 · B: 22 · C: 18 · D: 9 · E: 11.
 
 Every entry names the task and PR it unblocks. Priorities:
 
@@ -19,9 +23,13 @@ Every entry names the task and PR it unblocks. Priorities:
 
 ## Start here — the five that block everything
 
+*(2026-07-29: the old #1 — HA-A1, the `npm test` failure — is **DONE**; see its entry for
+evidence. The test-suite blocker is gone. What blocks launch now is merging, hosted-Supabase
+evidence, real content, and human QA.)*
+
 | # | Action | Priority |
 | --- | --- | --- |
-| **HA-A1** | Fix the `npm test` failure in PR #350. Every one of the eleven branches is red because of it, and **G2 cannot go TRUE while it stands.** | **P0** |
+| **HA-A2** | Merge in the verified order, starting with #350 — every open programme PR is green through build, so the sequence is unblocked — then retarget per HA-A8. | **P0** |
 | **HA-B1** | Run the hosted Supabase migration-history export. Task 3.6 blocks every migration, the backfill and the EPUB bucket question. | **P0** |
 | **HA-D1** | Name the 3–6 launch titles and confirm rights. There is no real content anywhere; the catalog, the intake pipeline and the launch copy are all empty templates. | **P0** |
 | **HA-E5** | Fill manual QA rows 1–10 with an RC SHA, an environment, a tester and ten sets of evidence. Ten blank rows keep **G10 FALSE** and issue #193 open. | **P0** |
@@ -32,25 +40,30 @@ Every entry names the task and PR it unblocks. Priorities:
 ## Group A — Unblocks everything: merges, retargets, production config
 
 ### HA-A1 — Fix the `npm test` failure that PR #350 introduced
-**Do:** Open the log for CI run #881 on `audit/2026-07-28-fixes`. Identify the failing spec.
-The evidence points at commit `8e6fa50` (`fix(catalog): make public book lookup duplicate-slug
-proof`), which replaced `.maybeSingle()` with `.order('published_at').limit(1)` on three query
-paths in `lib/data/books.ts` while the Supabase mocks in the unit suite still model
-`.maybeSingle()` with no `.order`/`.limit` on the chain. **This is inference, not a confirmed
-diagnosis** — read the log first. Fix it in #350, not downstream.
-**Why a human:** the agents that authored this programme could not install `node_modules`
-(`npm ci` exceeds the 45-second sandbox cap), so none of them could run jest at all. GitHub
-Actions logs are also not readable without an authenticated token.
-**Expected result:** run on `audit/2026-07-28-fixes` goes green through `npm test` **and**
-`npm run build` — which has never executed on any branch in this programme.
-**Unblocks:** every task in the programme. Directly: the merge of #350; transitively #351,
-#352, #353, #354, #355, #356, #357, #358, #359, #360. **Gate G2.**
-**Priority:** **P0**
+**✅ DONE — 2026-07-28/29.** The diagnosis held: the mocks were behind `8e6fa50`'s
+`.order('published_at').limit(1)` change. Fix commits landed on every branch (~22:40 UTC;
+on `audit/2026-07-28-fixes` it is `935e7d2` — `test(catalog): assert the
+duplicate-slug-hardened checkout read path`; `task/accessibility-and-browser-matrix` also
+needed `8bf70f91`, removing a spurious `virtual: true` mock flag). One straggler followed:
+#352's `npm run build` failed on a non-route export from the 410 webhook stub, fixed
+2026-07-29 00:17 UTC (`aeade43`/`ec23656`/`339218b`).
+**Evidence:** run #894 green on `935e7d2`
+(<https://github.com/redinc23/my_publishing/actions/runs/30405413119/job/90429631120>);
+run #913 green on `339218b`
+(<https://github.com/redinc23/my_publishing/actions/runs/30410720809/job/90445935848>);
+full per-branch table in `PROGRAMME_STATUS.md` §1. `npm run build` has now executed
+successfully on all eleven original branches — the first builds in the programme's history.
+**Still open nearby:** #361 and #362 remain red at `npm test` only because they forked
+before these fixes — that is HA-A9, not a re-open of this item.
+**Priority:** ~~P0~~ **DONE**
 
 ### HA-A2 — Merge in the verified order, starting with #350
 **Do:** `#350 → #351 → #356 → #352 → #354 → #353 → #357 → #355`, with **#359** anywhere after
-#350 and **#358 / #360** after #356 *and after HA-A3*. Verified against the actual git bases —
-see `PROGRAMME_STATUS.md` §2. Merge nothing before its branch is green.
+#350; **#360** after #356 *and after HA-A3's refresh*; **#362** after #360 (needs HA-A9 +
+HA-C18 sign-off); **#361** last, refreshed. #358 is gone from the sequence — Renee merged it
+into #356 on 2026-07-28 (23:06:20 UTC). Verified against the actual git bases — see
+`PROGRAMME_STATUS.md` §2. Merge nothing before its branch is green — **now satisfied for
+every open programme PR except #361/#362** (runs #894–#913).
 **Why a human:** merge authority, and the launch freeze (issue #209) requires each merge to be
 classified against a permitted change class.
 **Expected result:** eight PRs land on `main` in order, each with a green run on its own head
@@ -60,17 +73,19 @@ public site at all.
 **Priority:** **P0**
 
 ### HA-A3 — Update PRs #358 and #360 from #356 before reviewing them
-**Do:** Both fork `task/phase1-catalog-data-path` at `a43cea0`, **seven commits behind** its
-tip `00c6758`. The seven include `fix(books): stop the admin actions silently dropping form
-fields`, `fix(admin): stop the form posting a publication date nothing accepts` and
-`fix(books): stamp featured_at with is_featured on the Mongo write path`. Merge or rebase #356
-into both branches.
+**½ DONE.** The **#358 half is DONE** — Renee merged #358 into
+`task/phase1-catalog-data-path` at 2026-07-28 23:06:20 UTC; the merge was clean and the
+resulting head `9c28293` is green through build (run #910,
+<https://github.com/redinc23/my_publishing/actions/runs/30406910811/job/90434281690>), with
+#358's validator tests executing inside it. The branch is deleted.
+**Still to do — the #360 half:** `task/accessibility-and-browser-matrix` still forks
+`task/phase1-catalog-data-path` at `a43cea0`, now even further behind (the missing commits
+include the admin-form fixes *and* the merged #358). Merge #356's tip into it so the audit's
+line-number citations for `app/admin/books/_lib/BookForm.tsx` resolve to the current file.
 **Why a human:** no agent can rebase; pushes are API-only in this programme.
-**Expected result:** both branches contain `00c6758`; #360's audit line numbers for
-`app/admin/books/_lib/BookForm.tsx` resolve to the current file.
-**Unblocks:** Task 4.2 (#358), Section H (#360). Prevents both being reviewed against code
-that no longer exists.
-**Priority:** **P0**
+**Expected result:** #360's branch contains `9c28293`; its CI stays green.
+**Unblocks:** Section H (#360), and transitively #362.
+**Priority:** **P1** (was P0; the merged half removed the review-integrity risk for 4.2)
 
 ### HA-A4 — Record the known-good rollback target at cut time
 **Do:** At the moment you freeze the release candidate, capture the previous known-good
@@ -116,13 +131,30 @@ an empty history with `supabase db push`.**
 **Priority:** **P0**
 
 ### HA-A8 — Retarget eight PRs to `main` the moment #350 merges
-**Do:** #351, #352, #353, #354, #355, #356, #357 and #359 all target
-`audit/2026-07-28-fixes`. Retarget each to `main`. (#358 and #360 target
-`task/phase1-catalog-data-path` and should be retargeted when #356 lands.)
+**Do:** Now **nine**, not eight: #351, #352, #353, #354, #355, #356, #357, #359 **and
+#361** all target `audit/2026-07-28-fixes`. Retarget each to `main`. (#360 targets
+`task/phase1-catalog-data-path` — retarget when #356 lands. #362 targets
+`task/accessibility-and-browser-matrix` — retarget when #360 lands. #358 is merged; nothing
+to do. Heading kept as "eight PRs" for stable links.)
 **Why a human:** only a repository maintainer can change a PR base.
 **Expected result:** eight PRs showing base `main`, each still mergeable.
 **Unblocks:** the merge sequence. Every one of the eight PR bodies asks for this explicitly.
 **Priority:** **P0**
+
+### HA-A9 — Refresh the two red branches: #361 and #362
+**Do:** (1) Merge `audit/2026-07-28-fixes` tip (`935e7d2` or later) into
+`task/evidence-packet` (#361). (2) Merge `task/accessibility-and-browser-matrix` tip
+(`8bf70f91` or later) into `task/a11y-remediation` (#362), resolving the flagged
+`app/admin/books/_lib/BookForm.tsx` conflict — #362 edited it from a pre-`published_at`
+version of the file (conflict is flagged on #362; line-level resolution not verified by this
+recorder).
+**Why a human:** no agent in this programme can rebase or resolve merge conflicts; pushes
+are API-only.
+**Expected result:** both branches go green at `npm test` like the other eleven — their
+failures (runs #892 and #899) carry the same inherited signature the programme-wide fix
+cleared, and step-level evidence shows everything green up to `npm test` on both.
+**Unblocks:** the merge of #361 (this packet) and #362 (with HA-C18).
+**Priority:** **P1**
 
 ---
 
@@ -538,11 +570,16 @@ the default `Button` is `#ffffff` on `#ef4343` at 14px/500 → 3.78:1; `--primar
 would give 4.87:1.
 **Why a human:** it is a brand and design decision. The fix touches 62 files, or one token plus
 a rename — and no agent should pick a brand colour.
+**Update (2026-07-29):** PR #362 now implements the token-layer option — new
+`--text-secondary` and `--primary-strong` tokens with `text-secondary` repointed at the
+former — plus the four `test.fixme()` → `test()` promotions. **This changes the rendered
+colour of `text-secondary` site-wide (149 usages / 62 files), so it needs your design
+sign-off before merge.** It also needs HA-A9 (branch refresh + `BookForm.tsx` conflict).
 **Expected result:** a chosen fix, and the corresponding `test.fixme()` in
 `tests/e2e/accessibility.spec.ts` flipped to `test()` as the regression guard. **This should be
 resolved before launch, not after** — it is the difference between a low-vision reader being
 able to see the price and author of a book and not.
-**Unblocks:** Section H (#360). **Gate G6** (truthful, usable public surfaces).
+**Unblocks:** Section H (#360), PR #362. **Gate G6** (truthful, usable public surfaces).
 **Priority:** **P0**
 
 ---
@@ -567,7 +604,8 @@ metadata, the spotlights, the footer and both newsletter surfaces.
 **Why a human:** **the PR itself states all copy needs your sign-off before merge.** It is also
 the widest user-visible change in the programme (+514/−419 across nine public pages) and the
 one with the weakest verification evidence — #354's body records no static check, no executed
-assertions and no live probe.
+assertions and no live probe. (Update 2026-07-29: its branch is now green through build —
+run #901 — so it compiles and its unit tests pass; the words themselves still need you.)
 **Expected result:** written approval, or line edits. Note what was deliberately **not**
 changed: the "0 Books / 0 Authors" stat band and the genre tile counts were confirmed non-bugs
 and left untouched.
@@ -596,16 +634,17 @@ the Stripe `charge.refunded` handler actually does.
 **Priority:** **P1**
 
 ### HA-D5 — Reconcile the cover size limit: 2 MB or 5 MB?
-**Do:** `docs/BOOK_PUBLISHING_RUNBOOK.md` (#351) states cover **≤2 MB**. #358 cites the
-`book-covers` bucket `file_size_limit = 5242880` (**5 MB**) from
-`supabase/migrations/20260117000006_storage_policies.sql`, mirrored by `UPLOAD_CONFIGS.cover`
-in `types/upload.ts`.
-**Why a human:** the runbook may be deliberately stricter than the system, but it does not say
-so — and an operator following it will reject valid covers.
-**Expected result:** one number, stated consistently, with "guidance" versus "enforced"
-labelled.
-**Unblocks:** Task 2.6 (#351), Task 4.2 (#358).
-**Priority:** **P2**
+**✅ DONE — 2026-07-29, resolved in favour of the enforced 5 MB.** The runbook was corrected
+on `task/architecture-and-governance-docs`: it now states **"Maximum file size (enforced):
+5 MB — uploads above this are rejected"** and **"Target file size (editorial): ≤ 2 MB —
+house guideline, *not* enforced"**, with the same split repeated in the per-book signoff
+template. Verified by this recorder in
+[`docs/BOOK_PUBLISHING_RUNBOOK.md` on that branch](https://github.com/redinc23/my_publishing/blob/task/architecture-and-governance-docs/docs/BOOK_PUBLISHING_RUNBOOK.md)
+(cover-spec table and §"Enforced ceiling vs editorial target"). The enforced source of truth
+remains `file_size_limit = 5242880` in
+`supabase/migrations/20260117000006_storage_policies.sql`, mirrored by
+`UPLOAD_CONFIGS.cover`.
+**Priority:** ~~P2~~ **DONE**
 
 ### HA-D6 — Attest that retailer link destinations are correct
 **Do:** Open each retailer link for each launch book and confirm it reaches the right product
@@ -656,8 +695,9 @@ sign off any of it — `docs/OPERATOR_QA_LOG.md` now states this explicitly (CCR
 ### HA-E1 — Real signup, login failure and password reset on a preview
 **Do:** Register a genuine account. Fail a login three ways: wrong password, rate-limited, and
 limiter-unavailable if you can induce it. Request a password reset and complete it.
-**Why a human:** it needs a real inbox and a real browser. **The jest and Playwright suites
-were not executed by any agent in this programme**, so no automated evidence exists.
+**Why a human:** it needs a real inbox and a real browser. **Playwright has never executed,
+and the jest suites run in CI only under `USE_MOCKS='true'`**, so no automated evidence
+covers the live auth path.
 **Expected result:** no error message ever renders as `{}`, `[object Object]`, a stack trace, a
 URL, a file path, a JWT or a key. "Too many attempts, try again in 15 minutes" (429) reads
 differently from "temporarily unavailable" (503), and neither is confused with an invalid
@@ -800,7 +840,7 @@ already processed". Confirm `POST /api/webhook` unsigned returns **400** and
 
 ## Appendix — coverage map
 
-Every "Needs Renee" item across the eleven PRs, and where it landed here.
+Every "Needs Renee" item across the programme PRs, and where it landed here.
 
 | PR | Its asks | Consolidated as |
 | --- | --- | --- |
@@ -815,4 +855,5 @@ Every "Needs Renee" item across the eleven PRs, and where it landed here.
 | #358 | audio hosting; `short_description`; cover alt text; SEO columns; retailer attestation; author id pass | HA-C3, HA-C13, HA-C14, HA-C15, HA-D6, HA-D1 |
 | #359 | hosted export; PLAN A/B; corrective migration approval; backup; 13 columns; `SECURITY DEFINER`; backfill; bucket escalation | HA-B1, HA-B2, HA-A7, HA-B3, HA-C4, HA-C12, HA-C5, HA-B13 |
 | #360 | A11Y-001 decision; `@axe-core/playwright`; browser matrix | HA-C18, HA-B20, HA-E10 |
-| — | found by this recorder | HA-A1, HA-A2, HA-A3, HA-A6, HA-B21, HA-B22, HA-D5, HA-E11 |
+| #362 | contrast-token design sign-off; branch refresh + `BookForm.tsx` conflict | HA-C18, HA-A9 |
+| — | found by this recorder | HA-A1, HA-A2, HA-A3, HA-A6, HA-A9, HA-B21, HA-B22, HA-D5, HA-E11 |
