@@ -78,13 +78,16 @@ test.describe('Login page', () => {
     await expect(page.getByText(/invalid email/i)).toBeVisible();
   });
 
-  test('shows field-level error for short password', async ({ page }) => {
+  // Task 1.9: sign-in no longer applies the 8-character creation policy (that
+  // would lock out pre-existing shorter credentials), so the field-level rule
+  // it enforces is presence.
+  test('shows field-level error for a missing password', async ({ page }) => {
     await signInForm(page).getByLabel(/email/i).fill('test@example.com');
     await signInForm(page)
       .getByLabel(/password/i)
-      .fill('abc');
+      .fill('');
     await page.getByRole('button', { name: /sign in/i }).click();
-    await expect(page.getByText(/at least 6 characters/i)).toBeVisible();
+    await expect(page.getByText(/password is required/i)).toBeVisible();
   });
 
   test('displays URL error parameter from OAuth callback', async ({ page }) => {

@@ -25,7 +25,9 @@ export function LibraryCard({ item }: LibraryCardProps) {
   const isInProgress = Boolean(item.progress && !item.progress.isFinished);
   const isFinished = Boolean(item.progress?.isFinished);
   const percent = item.progress ? toProgressPercent(item.progress.currentPosition) : null;
-  const href = isInProgress ? `/reading/${book.id}` : `/books/${book.slug}`;
+  // Task 1.7: MANGU ships no on-site reader, so every card goes to the PDP
+  // (retailer links live there). `isInProgress` still drives the progress UI.
+  const href = `/books/${book.slug}`;
 
   const ariaLabel =
     `${book.title} by ${authorName}` +

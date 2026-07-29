@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getAuthorName, toProgressPercent, type LibraryItem } from './types';
 
@@ -71,18 +70,10 @@ export function ContinueReadingHero({ item }: ContinueReadingHeroProps) {
         )}
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
+          {/* Task 1.7: the reader was a stub, so the CTA opens the product page
+              (retailer links) instead of a non-functional reading surface. */}
           <Button asChild className="rounded-full bg-[#e5484d] px-6 text-white hover:bg-[#f2555a]">
-            <Link href={`/reading/${book.id}`}>
-              <Play className="mr-2 h-4 w-4 fill-current" />
-              Continue Reading
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            className="rounded-full border border-white/10 text-[#f5f1ea] hover:bg-white/10 hover:text-white"
-          >
-            <Link href={`/books/${book.slug}`}>Details</Link>
+            <Link href={`/books/${book.slug}`}>View book &amp; retailers</Link>
           </Button>
         </div>
       </div>

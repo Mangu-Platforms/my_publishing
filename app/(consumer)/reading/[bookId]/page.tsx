@@ -1,9 +1,16 @@
-// PERF-PHASE2-6 — Server-first reading page (Phoenix WS2d dual-run data)
+/**
+ * /reading/[bookId] — intentional terminal state (Task 1.7).
+ *
+ * Auth + entitlement checks are unchanged and still fail closed: anonymous
+ * visitors go to /login (middleware), and anyone without a completed order for
+ * the title is bounced to the product page. What changed is the payload: the
+ * route no longer pretends to be a reader.
+ */
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { fetchBookForApi } from '@/lib/data/books';
 import { getReadingSession } from '@/lib/data/reading';
-import ReadingClient from './ReadingClient';
+import { ReadingUnavailable } from './ReadingUnavailable';
 
 export default async function ReadingPage({ params }: { params: { bookId: string } }) {
   const supabase = await createClient();
@@ -26,5 +33,7 @@ export default async function ReadingPage({ params }: { params: { bookId: string
     redirect(catalogBook.slug ? `/books/${catalogBook.slug}` : '/library');
   }
 
-  return <ReadingClient book={session.book} initialProgress={session.progress} />;
+  return (
+    <ReadingUnavailable title={session.book.title} bookSlug={catalogBook.slug ?? null} />
+  );
 }

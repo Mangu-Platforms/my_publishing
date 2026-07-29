@@ -8,11 +8,16 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { signIn } from './actions';
+import { normalizeAuthErrorMessage } from '@/lib/auth/error-messages';
+import { PASSWORD_REQUIRED_MESSAGE } from '@/lib/auth/password-policy';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  // Task 1.9: sign-in checks presence only. The 8-character creation policy
+  // is enforced where passwords are SET (register / reset), so existing
+  // shorter credentials are not locked out of their own accounts.
+  password: z.string().min(1, PASSWORD_REQUIRED_MESSAGE),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -26,9 +31,16 @@ export function LoginForm() {
   // Surface errors forwarded via URL (e.g. from OAuth callback failures).
   useEffect(() => {
     const urlError = searchParams?.get('error');
-    if (urlError) {
-      setError(decodeURIComponent(urlError));
+    if (!urlError) {
+      return;
     }
+    let decoded = urlError;
+    try {
+      decoded = decodeURIComponent(urlError);
+    } catch {
+      // Malformed percent-encoding — fall back to the raw value.
+    }
+    setError(normalizeAuthErrorMessage(decoded));
   }, [searchParams]);
 
   const {
@@ -51,7 +63,9 @@ export function LoginForm() {
       const result = await signIn(formData);
 
       if (result && 'error' in result && result.error) {
-        setError(result.error);
+        // Task 1.8: last line of defence — the message slot only ever renders a
+        // safe string, never `{}`, `[object Object]` or a provider internal.
+        setError(normalizeAuthErrorMessage(result.error));
         setIsLoading(false);
       } else {
         // Full-page navigation so the client-side Supabase session picks up

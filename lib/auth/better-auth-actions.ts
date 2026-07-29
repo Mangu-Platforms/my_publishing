@@ -9,6 +9,7 @@ import { cookies, headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getAuth } from '@/lib/auth';
 import { MANGU_ROLE_COOKIE, normalizeManguRole } from '@/lib/auth/roles';
+import { normalizeAuthErrorMessage, redactAuthDiagnostic } from '@/lib/auth/error-messages';
 
 async function setRoleCookie(role: string) {
   const jar = await cookies();
@@ -38,7 +39,13 @@ export async function betterAuthSignIn(email: string, password: string) {
     revalidatePath('/', 'layout');
     return { success: true as const };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Sign in failed';
+    // Task 1.8: Better Auth throws APIError objects whose `message` is not
+    // always a usable string — normalize before it can reach the form.
+    console.error('[auth] Better Auth sign-in rejected:', redactAuthDiagnostic(error));
+    const message = normalizeAuthErrorMessage(
+      error,
+      'We could not sign you in right now. Please try again.'
+    );
     if (/verif/i.test(message)) {
       return { error: 'Please verify your email address before signing in.' };
     }
@@ -72,7 +79,11 @@ export async function betterAuthSignUp(input: {
       message: 'Check your email to verify your account before signing in.',
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Registration failed';
+    console.error('[auth] Better Auth sign-up rejected:', redactAuthDiagnostic(error));
+    const message = normalizeAuthErrorMessage(
+      error,
+      'We could not create your account right now. Please try again.'
+    );
     if (/already|exists|unique/i.test(message)) {
       return { error: 'An account with this email already exists.' };
     }
@@ -98,8 +109,13 @@ export async function betterAuthRequestPasswordReset(email: string) {
     });
     return { success: true as const };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Reset request failed';
-    return { error: message };
+    console.error('[auth] Better Auth reset request rejected:', redactAuthDiagnostic(error));
+    return {
+      error: normalizeAuthErrorMessage(
+        error,
+        'We could not start the password reset request. Please try again.'
+      ),
+    };
   }
 }
 
