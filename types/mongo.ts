@@ -8,6 +8,7 @@
  */
 
 import type { ObjectId } from 'mongodb';
+import type { RetailerUrlField } from '@/lib/books/fields';
 
 export type ManguRole = 'reader' | 'author' | 'partner' | 'admin';
 
@@ -41,7 +42,18 @@ export interface Author {
   updated_at: Date;
 }
 
-export interface Book {
+/**
+ * Book document in `books`.
+ *
+ * Everything past the core identity/pricing columns is optional: those fields
+ * arrived with the provider-aware admin write path (Task 2.0b) and Atlas holds
+ * documents that predate them, so every read mapper must tolerate absence.
+ *
+ * The six retailer URL keys are derived from `RETAILER_URL_FIELDS` rather than
+ * retyped, so adding a retailer touches exactly one file. `subtitle` is
+ * deliberately absent — see `MONGO_BOOK_EXTRA_WRITE_FIELDS`.
+ */
+export interface Book extends Partial<Record<RetailerUrlField, string | null>> {
   _id: ObjectId;
   title: string;
   slug: string;
@@ -58,6 +70,18 @@ export interface Book {
   avg_rating: number;
   review_count: number;
   content_type?: 'book' | 'comic' | 'paper';
+  isbn?: string | null;
+  epub_url?: string | null;
+  audio_url?: string | null;
+  /** Audiobook chapter list; shape is owned by the audio player, not the DB. */
+  audio_toc?: unknown;
+  audio_narrator?: string | null;
+  audio_duration_seconds?: number | null;
+  trailer_vimeo_id?: string | null;
+  is_featured?: boolean;
+  featured_at?: Date | null;
+  page_count?: number | null;
+  word_count?: number | null;
   published_at?: Date | null;
   created_at: Date;
   updated_at: Date;

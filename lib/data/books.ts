@@ -15,6 +15,7 @@ import {
   searchBooks,
   updateBook,
 } from '@/lib/mongo-queries';
+import { CATALOG_DETAIL_FIELDS, RETAILER_URL_FIELDS } from '@/lib/books/fields';
 
 export type ApiBook = {
   id: string;
@@ -51,6 +52,23 @@ function slugify(title: string): string {
     .slice(0, 80);
 }
 
+/**
+ * Copy a set of contract fields off a Mongo book document.
+ *
+ * The driver hands back loosely-typed documents and every catalog field is
+ * optional on `Book`, so read through a Record view rather than widening each
+ * mapper's parameter type. Absent values become null so a Mongo row and a
+ * Supabase row are indistinguishable to the UI.
+ */
+function projectFields(doc: unknown, fields: readonly string[]): Record<string, unknown> {
+  const source = (doc ?? {}) as Record<string, unknown>;
+  const projected: Record<string, unknown> = {};
+  for (const field of fields) {
+    projected[field] = source[field] ?? null;
+  }
+  return projected;
+}
+
 function mapBookWithAuthor(b: {
   _id: unknown;
   title: string;
@@ -61,6 +79,7 @@ function mapBookWithAuthor(b: {
   status?: string;
   visibility?: string;
   cover_url?: string | null;
+  content_type?: string | null;
   author_id?: unknown;
   avg_rating?: number;
   review_count?: number;
@@ -68,7 +87,11 @@ function mapBookWithAuthor(b: {
   author?: { _id?: unknown; pen_name?: string | null } | null;
 }): ApiBook {
   return {
+    // Cards carry the retailer links too — a list consumer and the detail page
+    // must not disagree about whether a book is buyable elsewhere (Task 2.0b).
+    ...projectFields(b, RETAILER_URL_FIELDS),
     id: String(b._id),
+    content_type: b.content_type ?? 'book',
     title: b.title,
     slug: b.slug,
     description: b.description ?? null,
@@ -224,6 +247,7 @@ function mapMongoBookCard(b: {
   status: string;
   visibility?: string;
   cover_url?: string | null;
+  content_type?: string | null;
   author_id: unknown;
   avg_rating?: number;
   review_count?: number;
@@ -231,7 +255,9 @@ function mapMongoBookCard(b: {
   author?: { _id?: unknown; pen_name?: string | null } | null;
 }): ApiBook {
   return {
+    ...projectFields(b, RETAILER_URL_FIELDS),
     id: String(b._id),
+    content_type: b.content_type ?? 'book',
     title: b.title,
     slug: b.slug,
     description: b.description ?? null,
@@ -256,36 +282,61 @@ function mapMongoBookCard(b: {
 }
 
 /**
- * Featured rail. Supabase uses `is_featured`; Mongo has no featured flag yet, so
- * it falls back to highest-rated published books (parity: a non-empty rail).
+ * Featured rail. Both providers key off `is_featured`; Mongo additionally tops
+ * the rail up with highest-rated published books so it is never empty before an
+ * editor has flagged `limit` titles.
  */
 export async function listFeaturedBooks(limit = 8): Promise<ApiBook[]> {
   if (isMongoPrimary()) {
     const { getDb } = await import('@/lib/mongo');
     const db = await getDb();
-    const rows = await db
-      .collection('books')
-      .aggregate([
-        { $match: { status: 'published', visibility: 'public' } },
-        { $sort: { avg_rating: -1, review_count: -1, created_at: -1 } },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: 'authors',
-            localField: 'author_id',
-            foreignField: '_id',
-            as: '_authors',
+
+    const rail = async (
+      match: Record<string, unknown>,
+      sort: Record<string, 1 | -1>,
+      take: number
+    ) => {
+      if (take <= 0) return [];
+      const rows = await db
+        .collection('books')
+        .aggregate([
+          { $match: { status: 'published', visibility: 'public', ...match } },
+          { $sort: sort },
+          { $limit: take },
+          {
+            $lookup: {
+              from: 'authors',
+              localField: 'author_id',
+              foreignField: '_id',
+              as: '_authors',
+            },
           },
-        },
-        {
-          $addFields: {
-            author: { $ifNull: [{ $arrayElemAt: ['$_authors', 0] }, null] },
+          {
+            $addFields: {
+              author: { $ifNull: [{ $arrayElemAt: ['$_authors', 0] }, null] },
+            },
           },
-        },
-        { $project: { _authors: 0 } },
-      ])
-      .toArray();
-    return rows.map((b) => mapMongoBookCard(b as Parameters<typeof mapMongoBookCard>[0]));
+          { $project: { _authors: 0 } },
+        ])
+        .toArray();
+      return rows || [];
+    };
+
+    const featured = await rail({ is_featured: true }, { featured_at: -1, created_at: -1 }, limit);
+    const filler = await rail(
+      { _id: { $nin: featured.map((b) => (b as { _id: unknown })._id) } },
+      { avg_rating: -1, review_count: -1, created_at: -1 },
+      limit - featured.length
+    );
+
+    // Keyed by id: the top-up query excludes the featured ids server-side, but a
+    // duplicate here would silently shorten the rail.
+    const byId = new Map<string, ApiBook>();
+    for (const row of [...featured, ...filler]) {
+      const card = mapMongoBookCard(row as Parameters<typeof mapMongoBookCard>[0]);
+      if (!byId.has(card.id)) byId.set(card.id, card);
+    }
+    return [...byId.values()].slice(0, limit);
   }
 
   const { getFeaturedBooks } = await import('@/lib/supabase/queries');
@@ -434,6 +485,11 @@ export async function fetchBookForApi(idOrSlug: {
     if (book.visibility && book.visibility !== 'public') return null;
     const penName = book.author?.pen_name ?? null;
     return {
+      // Retailer links, the audio sample, the trailer id and the rest of the
+      // shared contract come straight off the document. Hardcoding them null
+      // here is what hid the retailer buttons and the Audio Sample tab under
+      // DATABASE_PROVIDER=mongodb (Task 2.0b).
+      ...projectFields(book, CATALOG_DETAIL_FIELDS),
       id: String(book._id),
       title: book.title,
       slug: book.slug,
@@ -462,9 +518,6 @@ export async function fetchBookForApi(idOrSlug: {
         book.updated_at instanceof Date
           ? book.updated_at.toISOString()
           : String(book.updated_at ?? ''),
-      // Mongo Book has no trailer/audio columns yet — leave undefined for UI guards.
-      trailer_vimeo_id: null,
-      audio_url: null,
       author: penName
         ? {
             id: book.author?._id ? String(book.author._id) : undefined,
@@ -593,11 +646,14 @@ export async function fetchPublishedBookForCheckout(idOrSlug: {
 // ---------------------------------------------------------------------------
 // Audiobooks (/audio, /audio/[id]) — WS2d.1
 //
-// Live audio lives on Supabase `book_content.audio_url` (joined onto books).
-// Mongo `Book` has `content_type?: 'book'|'comic'|'paper'` but NO audio_url /
-// book_content equivalent yet (see fetchBookForApi: audio_url: null). Until
-// that schema lands, Mongo primary returns [] / null; Supabase path stays
-// authoritative for the default DATABASE_PROVIDER=supabase dual-run.
+// Supabase keeps audio on `book_content` (audio_url / toc / narrator); MongoDB
+// keeps the same values flat on the book document (audio_url / audio_toc /
+// audio_narrator / audio_duration_seconds). `mongoAudioContentRow` views the
+// Mongo shape as a `book_content` row so both providers share one set of
+// helpers — including `parseChapters`, the single chapter/TOC contract the
+// audio player components already consume.
+//
+// Launch scope is samples only: no entitlement gate, no full-length delivery.
 // ---------------------------------------------------------------------------
 
 export type AudiobookCatalogEntry = {
@@ -684,13 +740,77 @@ function authorDisplayName(book: {
 }
 
 /**
- * Published+public books that have a non-null `book_content.audio_url`.
- * Mongo: empty until Book gains audio fields (documented above).
+ * View a Mongo book document as a Supabase `book_content` row.
+ *
+ * Null means "carries no audio", which is also the filter both Mongo branches
+ * below apply — an empty `audio_url` must never reach the player.
  */
+function mongoAudioContentRow(doc: unknown): Record<string, unknown> | null {
+  const source = (doc ?? {}) as Record<string, unknown>;
+  const audioUrl = typeof source.audio_url === 'string' ? source.audio_url.trim() : '';
+  if (!audioUrl) return null;
+  return {
+    audio_url: audioUrl,
+    // `toc` is the key parseChapters and the AudiobookDetail.content consumers
+    // already expect; audio_toc is only the storage name on the document.
+    toc: source.audio_toc ?? null,
+    narrator: source.audio_narrator ?? null,
+    duration_seconds: source.audio_duration_seconds ?? null,
+  };
+}
+
+/** Published+public books that carry a non-empty audio sample. */
 export async function listAudiobooks(): Promise<AudiobookCatalogEntry[]> {
   if (isMongoPrimary()) {
-    // Fallback: Mongo Book has no audio_url / book_content join yet.
-    return [];
+    const { getDb } = await import('@/lib/mongo');
+    const db = await getDb();
+    const rows = await db
+      .collection('books')
+      .aggregate([
+        {
+          $match: {
+            status: 'published',
+            visibility: 'public',
+            audio_url: { $type: 'string', $ne: '' },
+          },
+        },
+        { $sort: { created_at: -1 } },
+        {
+          $lookup: {
+            from: 'authors',
+            localField: 'author_id',
+            foreignField: '_id',
+            as: '_authors',
+          },
+        },
+        {
+          $addFields: {
+            author: { $ifNull: [{ $arrayElemAt: ['$_authors', 0] }, null] },
+          },
+        },
+        { $project: { _authors: 0 } },
+      ])
+      .toArray();
+
+    const { parseChapters } = await import('@/components/audio/parse-chapters');
+
+    const entries: AudiobookCatalogEntry[] = [];
+    for (const doc of (rows as Array<Record<string, unknown>>) || []) {
+      const row = mongoAudioContentRow(doc);
+      if (!row) continue;
+      const chapters = parseChapters(row.toc);
+      const cover = doc.cover_url;
+      entries.push({
+        id: String(doc._id),
+        title: String(doc.title ?? ''),
+        author: authorDisplayName(doc as Parameters<typeof authorDisplayName>[0]),
+        ...(typeof cover === 'string' && cover ? { coverUrl: cover } : {}),
+        audioUrl: row.audio_url as string,
+        narrator: pickNarrator(row),
+        durationSec: pickDurationSec(row, chapters),
+      });
+    }
+    return entries;
   }
 
   const { createPublicCatalogClient, PUBLIC_BOOK_SELECT } =
@@ -731,16 +851,34 @@ export async function listAudiobooks(): Promise<AudiobookCatalogEntry[]> {
   return entries;
 }
 
-/**
- * Single published+public audiobook by id (requires audio_url on book_content).
- * Mongo: null until Book gains audio fields (documented above).
- */
+/** Single published+public audiobook by id (requires a non-empty audio_url). */
 export async function fetchAudiobookById(id: string): Promise<AudiobookDetail | null> {
   if (!id) return null;
 
   if (isMongoPrimary()) {
-    // Fallback: Mongo Book has no audio_url / book_content join yet.
-    return null;
+    // Same published+public gate as fetchBookForApi — /audio/[id] is public.
+    const book = await getBookById(id, { status: 'published', visibility: 'public' });
+    if (!book) return null;
+    if (book.visibility && book.visibility !== 'public') return null;
+    const row = mongoAudioContentRow(book);
+    if (!row) return null;
+
+    const { parseChapters } = await import('@/components/audio/parse-chapters');
+    const chapters = parseChapters(row.toc);
+    const penName = book.author?.pen_name ?? null;
+
+    return {
+      id: String(book._id),
+      title: book.title,
+      description: book.description ?? null,
+      cover_url: book.cover_url ?? null,
+      author: penName ? { pen_name: penName, profile: { full_name: penName } } : null,
+      audioUrl: row.audio_url as string,
+      chapters,
+      narrator: pickNarrator(row),
+      durationSec: pickDurationSec(row, chapters),
+      content: row,
+    };
   }
 
   const { createPublicCatalogClient, PUBLIC_BOOK_WITH_CONTENT_SELECT } =

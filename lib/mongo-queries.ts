@@ -9,6 +9,12 @@ import '@/lib/server-only-guard';
 
 import { ObjectId, type Db, type Document, type Filter } from 'mongodb';
 import { getDb } from '@/lib/mongo';
+import {
+  MONGO_BOOK_EXTRA_WRITE_FIELDS,
+  visibilityForStatus,
+  type ContentType,
+  type RetailerUrlField,
+} from '@/lib/books/fields';
 import type { Book, BookWithAuthor, MongoPagination, Order, PaginatedResult } from '@/types/mongo';
 
 export const DEFAULT_PAGE_SIZE = 20;
@@ -151,6 +157,56 @@ export async function getBookById(
 }
 
 /**
+ * Catalog fields beyond the core columns (audio, retailer links, ISBN...).
+ * Mirrors `AdminBookWriteInput` in `lib/mongo-books.ts`; declared locally so the
+ * API path carries no dependency on the admin write module.
+ */
+type BookCatalogWriteFields = Partial<{
+  content_type: ContentType;
+  isbn: string | null;
+  epub_url: string | null;
+  audio_url: string | null;
+  audio_toc: unknown;
+  audio_narrator: string | null;
+  audio_duration_seconds: number | null;
+  trailer_vimeo_id: string | null;
+  is_featured: boolean;
+  page_count: number | null;
+  word_count: number | null;
+  tags: string[];
+}> &
+  Partial<Record<RetailerUrlField, string | null>>;
+
+/**
+ * `published_at` is derived from the status transition, never taken from the
+ * caller, so it is excluded from the copied keys.
+ */
+const CATALOG_WRITE_FIELDS: readonly string[] = MONGO_BOOK_EXTRA_WRITE_FIELDS.filter(
+  (field) => field !== 'published_at'
+);
+
+/** Core columns a book write may set, in addition to `CATALOG_WRITE_FIELDS`. */
+const CORE_WRITE_FIELDS: readonly string[] = [
+  'title',
+  'slug',
+  'description',
+  'genre',
+  'price',
+  'currency',
+  'status',
+  'visibility',
+  'cover_url',
+  'manuscript_url',
+];
+
+/** Copy only supplied, whitelisted keys; `undefined` leaves the stored value alone. */
+function assignWriteFields(target: Document, input: Record<string, unknown>): void {
+  for (const key of [...CORE_WRITE_FIELDS, ...CATALOG_WRITE_FIELDS]) {
+    if (input[key] !== undefined) target[key] = input[key];
+  }
+}
+
+/**
  * Insert a book document. Returns the inserted id as string.
  */
 export async function createBook(
@@ -165,12 +221,14 @@ export async function createBook(
     status?: Book['status'];
     visibility?: Book['visibility'];
     cover_url?: string | null;
-  },
+    manuscript_url?: string | null;
+  } & BookCatalogWriteFields,
   db?: Db
 ): Promise<string> {
   const database = await resolveDb(db);
   const now = new Date();
-  const doc = {
+  const status = input.status ?? 'draft';
+  const doc: Document = {
     title: input.title,
     slug: input.slug,
     description: input.description ?? '',
@@ -178,15 +236,23 @@ export async function createBook(
     genre: input.genre,
     price: input.price ?? 0,
     currency: input.currency ?? 'usd',
-    status: input.status ?? 'draft',
-    visibility: input.visibility ?? 'private',
+    status,
+    // Derived from status unless pinned: a book created as published has to be
+    // publicly visible, otherwise the storefront queries skip it forever.
+    visibility: input.visibility ?? visibilityForStatus(status),
     cover_url: input.cover_url ?? null,
-    manuscript_url: null,
+    manuscript_url: input.manuscript_url ?? null,
+    tags: input.tags ?? [],
     avg_rating: 0,
     review_count: 0,
+    published_at: status === 'published' ? now : null,
     created_at: now,
     updated_at: now,
   };
+  for (const key of CATALOG_WRITE_FIELDS) {
+    const value = (input as Record<string, unknown>)[key];
+    if (value !== undefined) doc[key] = value;
+  }
   const result = await database.collection('books').insertOne(doc);
   return String(result.insertedId);
 }
@@ -202,19 +268,34 @@ export async function updateBook(
     description: string;
     genre: string;
     price: number;
+    currency: string;
     status: Book['status'];
     visibility: Book['visibility'];
     cover_url: string | null;
     manuscript_url: string | null;
-  }>,
+  }> &
+    BookCatalogWriteFields,
   db?: Db
 ): Promise<boolean> {
   const database = await resolveDb(db);
   const filter = idMatchFilter(id);
 
   const $set: Document = { updated_at: new Date() };
-  for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) $set[key] = value;
+  assignWriteFields($set, patch as Record<string, unknown>);
+
+  if (patch.status !== undefined && patch.visibility === undefined) {
+    $set.visibility = visibilityForStatus(patch.status);
+  }
+
+  // Stamped on the first publication only: unpublishing must not erase the date
+  // the book originally went live.
+  if (patch.status === 'published') {
+    const current = await database
+      .collection('books')
+      .findOne(filter, { projection: { published_at: 1 } });
+    if (!current?.published_at) {
+      $set.published_at = new Date();
+    }
   }
 
   const result = await database.collection('books').updateOne(filter, { $set });
