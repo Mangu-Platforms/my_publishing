@@ -23,11 +23,8 @@ jest.mock('next/server', () => ({
   },
 }));
 
-import {
-  CANONICAL_WEBHOOK_PATH,
-  GET as deprecatedGET,
-  POST as deprecatedPOST,
-} from '@/app/api/webhooks/stripe/route';
+import { GET as deprecatedGET, POST as deprecatedPOST } from '@/app/api/webhooks/stripe/route';
+import { CANONICAL_WEBHOOK_PATH } from '@/lib/stripe/webhook-paths';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
