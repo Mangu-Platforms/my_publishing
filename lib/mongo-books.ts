@@ -123,7 +123,9 @@ const BASE_WRITE_FIELDS = [
 /**
  * `published_at` belongs to the write path, not to the caller: it records the
  * first transition to published, so it is never copied out of form input and
- * never cleared. Everything else in the shared contract is caller-writable.
+ * never cleared. `featured_at` is the same kind of value and is likewise absent
+ * from the shared contract — it is derived from `is_featured` below. Everything
+ * else in the contract is caller-writable.
  */
 const EXTRA_WRITE_FIELDS: readonly string[] = MONGO_BOOK_EXTRA_WRITE_FIELDS.filter(
   (field) => field !== 'published_at'
@@ -200,6 +202,11 @@ export async function createBookAdminMongo(
     avg_rating: 0,
     review_count: 0,
     published_at: status === 'published' ? now : null,
+    // `featured_at` is the sort key of the featured rail (listFeaturedBooks
+    // sorts { featured_at: -1 }). A book flagged is_featured with no timestamp
+    // sorts behind every stamped title, which is how "featured" silently did
+    // nothing, so the flag and its timestamp are always written together.
+    featured_at: input.is_featured ? now : null,
     created_at: now,
     updated_at: now,
   };
@@ -231,16 +238,30 @@ export async function updateBookAdminMongo(
   const $set = buildBookWrite(patch);
   $set.updated_at = new Date();
 
-  // `published_at` records the FIRST publication. Unpublishing leaves it alone:
-  // clearing it would destroy the date the book originally went live, and the
-  // book is already hidden by `visibility`.
-  if (patch.status === 'published') {
+  // `published_at` and `featured_at` both record a FIRST transition, so both
+  // need the stored document. ONE read serves both, and nothing is read unless
+  // a flag is actually being turned on — unpublishing stays a single write.
+  const stampsPublish = patch.status === 'published';
+  const stampsFeature = patch.is_featured === true;
+  if (stampsPublish || stampsFeature) {
     const current = await database
       .collection('books')
-      .findOne(asIdFilter({ _id }), { projection: { published_at: 1 } });
-    if (!current?.published_at) {
+      .findOne(asIdFilter({ _id }), { projection: { published_at: 1, featured_at: 1 } });
+    // Unpublishing leaves published_at alone: clearing it would destroy the
+    // date the book originally went live, and `visibility` already hides it.
+    if (stampsPublish && !current?.published_at) {
       $set.published_at = new Date();
     }
+    // Never restamped: re-saving a featured book must not jump it to the front
+    // of the rail.
+    if (stampsFeature && !current?.featured_at) {
+      $set.featured_at = new Date();
+    }
+  }
+
+  // Un-featuring clears the sort key instead of leaving a stale timestamp.
+  if (patch.is_featured === false) {
+    $set.featured_at = null;
   }
 
   const result = await database
