@@ -155,7 +155,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <div className="flex min-h-screen flex-col">
             <Header />
-            <main className="flex-1">{children}</main>
+            {/*
+              id + tabIndex complete the A11Y-007 skip link. Header.tsx renders a
+              "Skip to main content" anchor targeting #main-content; without the
+              id here the fragment resolves to nothing, and without tabIndex={-1}
+              following it moves the scroll position but not keyboard focus. With
+              both, the skip link is a working WCAG 2.4.1 (Level A) bypass block.
+            */}
+            <main id="main-content" tabIndex={-1} className="flex-1">{children}</main>
             <Footer newsletterEnabled={newsletterEnabled} />
           </div>
         </Providers>
