@@ -25,6 +25,8 @@ const config: Config = {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+          // Darker fill for white text on solid primary buttons (A11Y-002).
+          strong: 'hsl(var(--primary-strong))',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
@@ -49,6 +51,18 @@ const config: Config = {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
+        },
+      },
+      // WHY: `secondary` is a *surface* token, so `bg-secondary` and friends
+      // must keep resolving to --secondary. `text-secondary` must not: used as
+      // a text colour it renders body copy at 1.37:1 in the default dark theme
+      // and 1.00:1 inside `bg-muted` (A11Y-001, 149 usages across 62 files).
+      // Overriding only the text scale repoints the utility at a real
+      // foreground token in one place, instead of rewriting every call site.
+      textColor: {
+        secondary: {
+          DEFAULT: 'hsl(var(--text-secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
         },
       },
       borderRadius: {
