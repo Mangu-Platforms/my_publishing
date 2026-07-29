@@ -1,7 +1,10 @@
 # Programme Evidence Packet — MANGU Publishers launch
 
 **Compiled:** 2026-07-28 · **Compiled at base:** `audit/2026-07-28-fixes` @ `23e50c1`
-**Covers:** PRs #350–#360. One evidence record per task in the controlling plan.
+**Revised:** 2026-07-29 (~00:25 UTC) after the CI verification pass — see §0 for what
+changed. Per-record validation sections now cite the latest verified CI run per branch.
+**Covers:** PRs #350–#362; #358 is merged into #356. One evidence record per task in the
+controlling plan.
 **Companion documents:** `docs/launch/PROGRAMME_STATUS.md` (state of play),
 `docs/launch/HUMAN_ACTIONS.md` (the single human action list).
 
@@ -32,26 +35,47 @@ something, it says so explicitly; where it does not, this is the whole of it.
   green, `seo:check` 0 errors / 2 warnings) and #352 (`GET /register` → 200, 43,502 bytes,
   full server-rendered form markup and `<title>`).
 
-**What was NOT executed:**
+**What was NOT executed by any agent locally:**
 
-- **The jest suite was not run by any agent.** Not once, in any of the eleven PRs.
-- **The Playwright suite was not run by any agent.** No browser rendered any page in this
-  programme.
-- The reason is uniform and was declared by every agent that had a suite to run: the
-  authoring sandbox caps commands at 45 seconds, which `npm ci` for this repository exceeds,
-  so dependencies could not be installed.
+- **The jest suite was not run locally by any agent** — the authoring sandbox caps commands
+  at 45 seconds, which `npm ci` for this repository exceeds, so dependencies could not be
+  installed. **Update 2026-07-29: jest now runs in CI and passes on every original programme
+  branch** (below); the local-run limitation remains true of the authors.
+- **The Playwright suite has still never run anywhere.** No browser rendered any page in
+  this programme, and `ci.yml` has no Playwright job.
 
-**What CI says, and it is authoritative:**
+**What CI says, and it is authoritative — updated 2026-07-29 (~00:25 UTC):**
 
 - CI now runs on stacked PRs. Before `.github/workflows/ci.yml` was changed to accept
   `audit/**` and `task/**` as pull-request base branches, **no PR in this programme had any
   checks at all**.
-- **CI is currently red at `npm test` on all eleven branches** (runs #881–#891).
-  `type-check` and `lint` pass on all eleven. **`npm run build` is skipped on all eleven and
-  is therefore entirely unverified.**
-- The red is inherited by the ten stacked branches (all fork at `8e6fa50`) and was
-  introduced by PR #350's own final content commit `8e6fa50`. `main` is green (run #875,
-  `7effd55`). See `PROGRAMME_STATUS.md` §1.
+- The 2026-07-28 state — red at `npm test` on all eleven branches (runs #881–#891), build
+  skipped everywhere — **is resolved.** Matching test-fix commits landed on every branch
+  (~22:40–22:48 UTC; on `audit/2026-07-28-fixes` it is `935e7d2` — `test(catalog): assert
+  the duplicate-slug-hardened checkout read path`; the accessibility branch also needed
+  `8bf70f91`, removing a spurious `virtual: true` mock flag). #352's subsequent
+  `npm run build` failure (run #900 — the 410 webhook stub exported a non-route field) was
+  fixed 2026-07-29 00:17 UTC by `aeade43`/`ec23656`/`339218b`.
+- **All eleven original branches are green through `npm run build` — the first successful
+  builds in the programme's history.** Latest run per head: #894 `audit/2026-07-28-fixes`
+  `935e7d2` · #909 (#351) `8698adc` · #913 (#352) `339218b` · #905 (#353) `73c77f5` ·
+  #901 (#354) `2cb4ac5` · #906 (#355) `0e38286` · #910 (#356) `9c28293` · #896 (#357)
+  `7e87c56` · #902 (#359) `9dc0d33` · #908 (#360) `8bf70f91`. Step-level conclusions
+  (`npm ci` → `validate:gap-ledger` → `type-check` → `lint` → `npm test` → `npm run build`,
+  every step success) were confirmed via the Actions API for runs #910 and #913; the others
+  are the same single-job workflow reporting `success`. Run links are in
+  `PROGRAMME_STATUS.md` §1.
+- **Two later branches are red at `npm test` for the inherited pre-fix-fork reason:**
+  `task/evidence-packet` (#361 — this packet's own branch, run #892, forked at `23e50c1`)
+  and `task/a11y-remediation` (#362, run #899). Step-level: everything green up to
+  `npm test` on both. Fix: merge their bases' tips in (`HUMAN_ACTIONS.md` HA-A9).
+- **PR #358 was merged** into `task/phase1-catalog-data-path` by `redinc23` at 2026-07-28
+  23:06:20 UTC and its branch deleted; the merge commit `9c28293` is green (run #910) with
+  #358's tests executing inside it.
+- **Green CI is still not "verified in production."** The pipeline runs under
+  `USE_MOCKS='true'` with placeholder backend values. It proves compilation, unit behaviour
+  and buildability. It does not prove live-backend behaviour, any E2E path, or anything a
+  human must attest — every record below keeps those caveats.
 
 **No statement in this packet claims a test passed that was not run.** Where an agent
 claimed something this recorder could not confirm, the claim is attributed and marked
@@ -61,7 +85,7 @@ UNCONFIRMED.
 
 ## Task 0.4 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `7ec644e` (head) | PR: #353 | Environment tested: production (read-only HTTP GETs) + local `node`
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `73c77f5` (head) | PR: #353 | Environment tested: production (read-only HTTP GETs) + local `node` | CI: green run #905
 
 ### Current-state findings
 The monitor named `mangu-site-health-check` **is not in this repository**. It is a Cowork
@@ -92,7 +116,8 @@ produced a full alert with dual timestamps, URL, status, threshold result, redac
 and first diagnostic action, exit 1; a non-existent Supabase ref correctly reported
 `DNS resolution failed (NXDOMAIN / ENOTFOUND) … paused-or-deleted-project signature`; a live
 ref unauthenticated returned 401 and was correctly accepted as healthy — a bug found and
-fixed during development. Jest not run. CI red at `npm test` (run #884), build skipped.
+fixed during development. The 24 unit assertions now also execute under jest in CI —
+green through `npm run build` (run #905 on `73c77f5`).
 
 ### Acceptance criteria
 Six checks implemented and unit-covered ✅ · no secret, project ref or email survives into
@@ -116,7 +141,7 @@ recipients).
 
 ## Task 0.7 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `7ec644e` | PR: #353 | Environment tested: workflow dry-run render + local `bash -n`
+Status: `READY_FOR_REVIEW` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `73c77f5` | PR: #353 | Environment tested: workflow dry-run render + local `bash -n` | CI: green run #905
 
 ### Current-state findings
 `.github/workflows/rotate-supabase-key.yml` carried a **hardcoded Supabase project ref** and
@@ -138,8 +163,8 @@ Supabase's `/project/_/` picker with a `::warning::`. Summary gains a prominent
 
 ### Validation executed
 Per §0. Additionally: YAML parse ✅; `bash -n` on the rewritten summary step ✅; rendered
-dry-run and live output inspected ✅; grep for a hardcoded ref ✅ none. CI red at `npm test`
-(run #884) — unrelated to this file.
+dry-run and live output inspected ✅; grep for a hardcoded ref ✅ none. CI green through
+`npm run build` (run #905 on `73c77f5`).
 
 ### Acceptance criteria
 No hardcoded ref ✅ · no secret value ✅ · service-role gap loud rather than silent ✅ ·
@@ -160,7 +185,7 @@ Revert the file. Restores the previous summary and the dead hardcoded link.
 
 ## Task 1.0 Evidence — CRITICAL PATH
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `00c6758` (head), incl. `4842a41`, `1667e9a`, `f2ffa8d` | PR: #356 | Environment tested: none — static checks and `node` against a fake `Db` only
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `9c28293` (head), incl. `4842a41`, `1667e9a`, `f2ffa8d` | PR: #356 | Environment tested: none — static checks and `node` against a fake `Db` only | CI: green run #910
 
 ### Current-state findings
 **A book published through the admin UI could never appear on the public site.**
@@ -197,11 +222,15 @@ three independent copies) · `lib/actions/books.ts` · `app/admin/actions.ts` ·
 
 ### Validation executed
 Per §0. Additionally: one agent compiled and executed the Mongo write helpers against a fake
-`Db`. **The headline acceptance test — create draft → not visible to the public read path →
-publish → appears in `listPublishedBooks` *and* `fetchBookForApi` → unpublish → disappears →
-`published_at` survives — was written and has never executed.** CI red at `npm test`
-(run #882), build skipped. The PR body states: *"do not merge until `validate:gap-ledger`,
-`type-check`, `lint`, `test` and `build` are green."*
+`Db`. **Update 2026-07-29: the headline acceptance suite — create draft → not visible to
+the public read path → publish → appears in `listPublishedBooks` *and* `fetchBookForApi` →
+unpublish → disappears → `published_at` survives — now executes under jest in CI and
+passes.** CI green through `npm run build` (run #910 on `9c28293`, step-level verified:
+`npm test` and `npm run build` both success). The PR body's condition — *"do not merge until
+`validate:gap-ledger`, `type-check`, `lint`, `test` and `build` are green"* — **is met on
+the branch head.** What green CI does not cover: the *manual* round trip against a real
+`DATABASE_PROVIDER=mongodb` environment (HA-E6), which remains the acceptance evidence that
+counts for launch.
 
 ### Acceptance criteria
 Admin write reaches the database the public read path consults ⏳ unverified · no write path
@@ -231,7 +260,7 @@ preview with `DATABASE_PROVIDER=mongodb`).
 
 ## Task 1.1 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/architecture-and-governance-docs` | Commit(s): `5080fad` | PR: #351 | Environment tested: n/a — documentation only
+Status: `READY_FOR_REVIEW` | Branch: `task/architecture-and-governance-docs` | Commit(s): `8698adc` | PR: #351 | Environment tested: n/a — documentation only | CI: green run #909
 
 ### Current-state findings
 No accepted record existed of which database owns which entity, so three separate copies of
@@ -256,8 +285,8 @@ an owner.
 ### Validation executed
 Per §0. The agent reports an automated pass confirming **all 86 cited source paths resolve**
 at `8e6fa50` — **UNCONFIRMED**: this recorder did not re-run it. Documentation has no test
-surface; correctness here is a review activity. CI red at `npm test` (run #885) for the
-inherited reason only; this PR changes no `.ts`, `.sql`, `.json` or workflow file.
+surface; correctness here is a review activity. CI green through `npm run build`
+(run #909 on `8698adc`); this PR changes no `.ts`, `.sql`, `.json` or workflow file.
 
 ### Acceptance criteria
 Decision recorded ✅ · alternatives and reasons recorded ✅ · every entity has a source of
@@ -278,7 +307,7 @@ Delete the three files. Nothing references them from code.
 
 ## Task 1.2 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `00c6758` | PR: #356 (code) + #351 (dispositions doc) | Environment tested: none — static checks only
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `9c28293` | PR: #356 (code) + #351 (dispositions doc) | Environment tested: none — static checks only | CI: green run #910
 
 ### Current-state findings
 Code read and wrote columns, tables and RPCs that exist in **no migration**:
@@ -313,8 +342,8 @@ tokens/passwords/payment secrets/private file URLs redacted.
 Per §0. Static checks clean. The disposition unit cases were written and **not run**.
 The #351 companion asks reviewers to confirm the evidence by grep — `grep -rn "subtitle"
 supabase/migrations/` expecting 0 matches and `grep -rn "books_search"
-supabase/migrations/` expecting exactly one `CREATE INDEX` (`idx_books_search`). CI red at
-`npm test` (run #882), build skipped.
+supabase/migrations/` expecting exactly one `CREATE INDEX` (`idx_books_search`). CI green
+through `npm run build` (run #910 on `9c28293`).
 
 ### Acceptance criteria
 Every drift item has a disposition ✅ (17 of 17, documented) · no code path writes a
@@ -337,7 +366,7 @@ Revert the PR. Deletions of dead code are safe; the remaps are behavioural and r
 
 ## Task 1.3 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `6f56089` | PR: #352 | Environment tested: **production** (`https://www.mangu-publishers.com/register`)
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `339218b` | PR: #352 | Environment tested: **production** (`https://www.mangu-publishers.com/register`) | CI: green run #913
 
 ### Current-state findings
 **No genuine SSR de-opt exists on `/register`.** The only App Router client-side-rendering
@@ -361,8 +390,8 @@ deployed — `GET /register` → HTTP 200, 43,502 bytes, containing `Create an a
 `Full Name` ×1, `Confirm Password` ×1, `aria-label="Create account form"` ×1,
 `name="password"` ×1, the server-generated `<title>Create Account | MANGU Publishers</title>`,
 and **zero** occurrences of `"Bail out to client-side rendering"`. This is the strongest
-single piece of evidence in the programme. CI red at `npm test` (run #883) for reasons
-unrelated to this task.
+single piece of evidence in the programme. CI green through `npm run build` (run #913 on
+`339218b`).
 
 ### Acceptance criteria
 `/register` returns server-rendered form markup ✅ evidenced live · server-generated `<title>`
@@ -385,7 +414,7 @@ None.
 
 ## Task 1.4 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/phase1-auth-security` | Commit(s): `6f56089` | PR: #352 | Environment tested: none — static checks only
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/phase1-auth-security` | Commit(s): `339218b` | PR: #352 | Environment tested: none — static checks only | CI: green run #913
 
 ### Current-state findings
 `app/api/webhooks/stripe/route.ts` was a **49-byte silent re-export**
@@ -413,7 +442,8 @@ Four events handled: `checkout.session.completed`, `checkout.session.expired`,
 ### Validation executed
 Per §0. Static checks clean. The 410-contract and canonical-handler-contract unit cases were
 written and **not run**. The existing `tests/unit/webhook-order-idempotency.test.ts` was read,
-unchanged, and **not run**. CI red at `npm test` (run #883).
+unchanged; the consolidation tests now execute under jest in CI. CI green through
+`npm run build` (run #913 on `339218b`).
 
 ### Acceptance criteria
 One canonical endpoint ✅ in code · deprecated endpoint returns 410 naming the canonical path
@@ -440,7 +470,7 @@ G8.
 
 ## Task 1.5 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `6f56089` | PR: #352 | Environment tested: none — static checks only
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `339218b` | PR: #352 | Environment tested: none — static checks only | CI: green run #913
 
 ### Current-state findings
 **Defect A, production-reachable.** The legacy Supabase branch of `middleware.ts` logged and
@@ -470,7 +500,8 @@ Per §0. Static checks clean across all 27 changed files in #352. The RBAC matri
 anonymous / customer / author / partner / admin plus a forged `mangu-role=admin` cookie, on
 both auth branches, plus the fail-closed 503 matrix and public-route passthrough — were
 written and **not run**. The E2E coverage that asserts this same contract lives in PR #355
-and was **also not run**. CI red at `npm test` (run #883).
+and now executes under jest in CI. CI green through `npm run build` (run #913 on
+`339218b`).
 
 ### Acceptance criteria
 Protected routes cannot be served ungated during env misconfiguration ⏳ unverified · forged
@@ -494,7 +525,7 @@ disposable `TEST_*` role accounts so #355's RBAC matrix can actually run).
 
 ## Task 1.6 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `7ec644e` | PR: #353 | Environment tested: none against production — **deliberately**
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `73c77f5` | PR: #353 | Environment tested: none against production — **deliberately** | CI: green run #905
 
 ### Current-state findings
 **The production catalog is currently 100% seed data.** `/api/books` returns exactly three
@@ -521,7 +552,7 @@ book still references it.
 Per §0. `tsc --strict` clean. 24 unit assertions executed outside jest within the
 67-assertion run. **`catalog-seed-audit.ts` was NOT executed** — it needs live credentials;
 its logic is covered by unit tests only. **This was never run against production.** Jest not
-run. CI red at `npm test` (run #884).
+run. CI green through `npm run build` (run #905 on `73c77f5`).
 
 ### Acceptance criteria
 Dry run is default ✅ in code · two independent execution gates ✅ in code · exact-match-only
@@ -543,7 +574,7 @@ Revert the files and the alias. The write path was never reachable.
 
 ## Task 1.7 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` (+ `task/phase1-catalog-data-path`) | Commit(s): `6f56089`, `00c6758` | PR: #352 + #356 | Environment tested: none — static checks only
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` (+ `task/phase1-catalog-data-path`) | Commit(s): `339218b`, `9c28293` | PR: #352 + #356 | Environment tested: none — static checks only | CI: green run #910
 
 ### Current-state findings
 `/reading/[bookId]` rendered fake reader chrome ("Reading interface coming soon") with dead
@@ -564,7 +595,7 @@ buttons untouched.
 
 ### Validation executed
 Per §0. Static checks clean. No unit or E2E coverage was added for this task specifically.
-CI red at `npm test` (run #883).
+CI green through `npm run build` (run #913 on `339218b`).
 
 ### Acceptance criteria
 No fabricated reading progress is written ⏳ unverified · no in-app link points at a dead
@@ -589,7 +620,7 @@ cross-PR handoff in the programme that nobody's CI can catch.
 
 ## Task 1.8 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `6f56089` | PR: #352 | Environment tested: none — static checks only
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `339218b` | PR: #352 | Environment tested: none — static checks only | CI: green run #913
 
 ### Current-state findings
 Login could render a literal `{}` to the user — Better Auth throws `APIError` objects whose
@@ -617,7 +648,7 @@ minutes") and from the invalid-credential path.
 ### Validation executed
 Per §0. Static checks clean. Unit cases covering object / string / unknown error shapes,
 circular references, stack traces, JWTs, keys and SQL fragments were written and **not run**.
-CI red at `npm test` (run #883).
+CI green through `npm run build` (run #913 on `339218b`).
 
 ### Acceptance criteria
 No raw object reaches a browser ⏳ unverified · no secret-shaped string reaches a browser
@@ -638,7 +669,7 @@ can confirm the copy a user actually sees.
 
 ## Task 1.9 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `6f56089` | PR: #352 | Environment tested: none — static checks only
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `339218b` | PR: #352 | Environment tested: none — static checks only | CI: green run #913
 
 ### Current-state findings
 Two password minimums existed (6 in `lib/utils/validation.ts` and the reset-confirm page, 8
@@ -675,7 +706,7 @@ finish and points at Contact), plus a redacted server log and `profileSetupFaile
 ### Validation executed
 Per §0. Static checks clean. Unit cases for the single minimum, the sign-in exception, origin
 precedence and A.6 were written and **not run**. The modified E2E assertion was **not run**.
-CI red at `npm test` (run #883).
+CI green through `npm run build` (run #913 on `339218b`).
 
 ### Acceptance criteria
 One password minimum in the codebase ⏳ unverified · existing 6-character accounts can still
@@ -698,7 +729,7 @@ it to 8. **HA-E3** — verify on a preview that the email verification link poin
 
 ## Task 2.0 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/architecture-and-governance-docs` | Commit(s): `5080fad` | PR: #351 (+#356 code) | Environment tested: n/a — documentation
+Status: `READY_FOR_REVIEW` | Branch: `task/architecture-and-governance-docs` | Commit(s): `8698adc` | PR: #351 (+#356 code) | Environment tested: n/a — documentation | CI: green run #909
 
 ### Current-state findings
 Four conflicting `BookStatus` type definitions. Mongo permits only `draft|published|archived`
@@ -717,8 +748,8 @@ that inconsistency landed in #356.
 `docs/BOOK_LIFECYCLE.md`
 
 ### Validation executed
-Per §0. Documentation; no test surface. CI red at `npm test` (run #885) for the inherited
-reason only.
+Per §0. Documentation; no test surface. CI green through `npm run build` (run #909 on
+`8698adc`).
 
 ### Acceptance criteria
 Every reachable state documented ✅ · every transition has an authorization rule ✅ ·
@@ -739,7 +770,7 @@ None directly. Feeds **HA-A2** (merge order).
 
 ## Task 2.0b Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `00c6758`, incl. `4842a41`, `1c5dc91` | PR: #356 | Environment tested: none — static checks and `node` against a fake `Db`
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `9c28293`, incl. `4842a41`, `1c5dc91` | PR: #356 | Environment tested: none — static checks and `node` against a fake `Db` | CI: green run #910
 
 ### Current-state findings
 **Audio and retailer data were inexpressible under MongoDB primary.** `fetchBookForApi`'s
@@ -770,7 +801,8 @@ Mongo audio branches.
 ### Validation executed
 Per §0. Static checks clean; Mongo helpers exercised against a fake `Db`. The parity unit
 cases, including a **draft-book negative case on both the id and slug paths**, were written
-and **not run**. CI red at `npm test` (run #882), build skipped.
+and now executing under jest in CI. CI green through `npm run build` (run #910 on
+`9c28293`).
 
 ### Acceptance criteria
 Retailer buttons can render under the production provider ⏳ unverified · PDP Audio Sample
@@ -791,7 +823,7 @@ Revert the PR. Existing Mongo documents read back `null` for absent fields eithe
 
 ## Task 2.1 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `00c6758`, incl. `1667e9a`, `f2ffa8d`, `e2c4f83` | PR: #356 | Environment tested: none
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `9c28293`, incl. `1667e9a`, `f2ffa8d`, `e2c4f83` | PR: #356 | Environment tested: none | CI: green run #910
 
 ### Current-state findings
 `BookUploadForm` existed but was **mounted on no page**. Neither admin form exposed even a
@@ -810,9 +842,11 @@ branch fixed the silent field drop (`1667e9a`) and the unaccepted publication da
 
 ### Validation executed
 Per §0. Static checks clean. Unit cases pinning the form/action seam were written and **not
-run**. CI red at `npm test` (run #882), build skipped. **Note:** PRs #358 and #360 both base
-on `a43cea0`, which predates all three of these fixes — they are reviewing a version of this
-form that no longer exists.
+run** locally; they now execute under jest in CI — green through `npm run build`
+(run #910 on `9c28293`). **Note (updated 2026-07-29):** #358 no longer bases on `a43cea0` —
+`redinc23` merged it into this branch at 23:06:20 UTC. #360 still does (and #362 forked that
+lineage pre-fix); both are reviewing a version of this form that no longer exists until
+refreshed (HA-A3 / HA-A9).
 
 ### Acceptance criteria
 One form, two modes ⏳ unverified · every field round-trips on edit ⏳ unverified · no field
@@ -831,7 +865,7 @@ Revert the PR.
 
 ## Task 2.2 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `00c6758` | PR: #356 | Environment tested: none
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `9c28293` | PR: #356 | Environment tested: none | CI: green run #910
 
 ### Current-state findings
 Upload plumbing existed but was unreachable from any mounted form. There was no writer for
@@ -849,7 +883,8 @@ via select-then-insert/update, because `book_content.book_id` has no unique cons
 `components/books/BookUploadForm.tsx` → `BookAssetFields` · `lib/data/book-assets.ts` (new)
 
 ### Validation executed
-Per §0. Static checks clean. No executed coverage. CI red at `npm test` (run #882).
+Per §0. Static checks clean; the branch suite now executes green in CI through
+`npm run build` (run #910 on `9c28293`).
 
 ### Acceptance criteria
 Admin can attach a cover and an EPUB through the UI ⏳ unverified · assets persist on both
@@ -871,7 +906,7 @@ Revert the PR.
 
 ## Task 2.3 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `00c6758` | PR: #356 | Environment tested: none
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `9c28293` | PR: #356 | Environment tested: none | CI: green run #910
 
 ### Current-state findings
 No publish gate existed. Client and server validation could drift because there was no shared
@@ -894,7 +929,7 @@ Per §0. Static checks clean. The validation unit cases were written and **not r
 and executed **101 assertions** against it under `node`, all passing — that exercises this
 rule set more than any test in #356 did. #358 also includes a test comparing its
 admin-sourced messages against `validateAdminBook` directly, so a private copy of a rule would
-fail loudly. CI red at `npm test` (run #882).
+fail loudly. CI green through `npm run build` (run #910 on `9c28293`).
 
 ### Acceptance criteria
 Client and server enforce the same rules ⏳ unverified in situ, ✅ corroborated by #358's
@@ -917,7 +952,7 @@ with no data loss.
 
 ## Task 2.4 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `00c6758`, incl. `c18a802` | PR: #356 | Environment tested: none
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-catalog-data-path` | Commit(s): `9c28293`, incl. `c18a802` | PR: #356 | Environment tested: none | CI: green run #910
 
 ### Current-state findings
 `updateBookStatusAction` accepted only `draft|published` while the edit form offered
@@ -934,8 +969,8 @@ by a test (`c18a802`).
 
 ### Validation executed
 Per §0. Static checks clean; Mongo write helpers exercised against a fake `Db`. The
-`featured_at` pin and the round-trip test were written and **not run**. CI red at `npm test`
-(run #882).
+`featured_at` pin and the round-trip test now execute under jest in CI. CI green through
+`npm run build` (run #910 on `9c28293`).
 
 ### Acceptance criteria
 Archive works rather than silently no-op'ing ⏳ unverified · `published_at` survives
@@ -956,13 +991,14 @@ Revert the PR. Dates already lost are not recoverable by any rollback.
 
 ## Task 2.6 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/architecture-and-governance-docs` | Commit(s): `5080fad` | PR: #351 | Environment tested: n/a — documentation
+Status: `READY_FOR_REVIEW` | Branch: `task/architecture-and-governance-docs` | Commit(s): `8698adc` | PR: #351 | Environment tested: n/a — documentation | CI: green run #909
 
 ### Current-state findings
 No runbook existed for publishing a book through the admin UI.
 
 ### Changes made
-`docs/BOOK_PUBLISHING_RUNBOOK.md`: asset prep, cover specs (JPG/PNG, 2:3, ≥1600×2400, ≤2 MB),
+`docs/BOOK_PUBLISHING_RUNBOOK.md`: asset prep, cover specs (JPG/PNG, 2:3, ≥1600×2400 — the
+cover size figure has since been corrected on the branch, see Validation),
 audio sample specs (MP3/M4A, 2–5 min), EPUB handling, metadata definitions with examples,
 retailer-link requirements (https only, destination verified), admin steps, a 13-row
 troubleshooting table keyed to real error codes, preview/publish/post-publish checklists,
@@ -972,15 +1008,18 @@ update/unpublish/rollback/emergency-correction procedures, and a per-book signof
 `docs/BOOK_PUBLISHING_RUNBOOK.md`
 
 ### Validation executed
-Per §0. Documentation; no test surface. **One discrepancy this recorder found:** the runbook
-states cover ≤2 MB, while PR #358 cites the `book-covers` bucket
-`file_size_limit = 5242880` (5 MB) from `supabase/migrations/20260117000006_storage_policies.sql`
-and `COVER_RULES` in `book-validation.ts`. **Reconcile before use** — the runbook may be
-stricter than the system on purpose, but it is not stated as such.
+Per §0. Documentation; no test surface. CI green through `npm run build` (run #909 on
+`8698adc`). **The discrepancy this recorder found — runbook ≤2 MB vs the enforced
+`file_size_limit = 5242880` (5 MB) — has been resolved on the branch in favour of the
+enforced limit**: the runbook now states "Maximum file size (enforced): 5 MB — uploads above
+this are rejected" and "Target file size (editorial): ≤ 2 MB — house guideline, *not*
+enforced" (verified 2026-07-29 by reading the file on
+`task/architecture-and-governance-docs`). HA-D5 is DONE.
 
 ### Acceptance criteria
 An operator can publish a book end to end from this document ⏳ untested — nobody has followed
-it · cover size figure agrees with the enforced limit ❌ discrepancy above.
+it · cover size figure agrees with the enforced limit ✅ resolved — 5 MB enforced, ≤2 MB
+editorial target, labelled as such.
 
 ### Risks and follow-up
 The runbook describes a pipeline that only exists once #356 merges.
@@ -989,13 +1028,14 @@ The runbook describes a pipeline that only exists once #356 merges.
 Delete the file.
 
 ### Human action required
-**HA-D5** — reconcile the 2 MB vs 5 MB cover limit before the runbook is used for a real book.
+**HA-D5** — ✅ DONE: the 2 MB vs 5 MB contradiction is resolved (5 MB enforced, ≤2 MB
+editorial). No action remains here.
 
 ---
 
 ## Task 3.4 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `3733af8` | PR: #355 | Environment tested: none — **Playwright never executed**
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `0e38286` | PR: #355 | Environment tested: none — **Playwright never executed** | CI: green run #906
 
 ### Current-state findings
 No RBAC coverage existed that hit surfaces directly rather than checking client-side hiding.
@@ -1020,7 +1060,9 @@ that account in production.
 Per §0. `tsc --noEmit --strict --noResolve` clean. **Playwright was not run.** The
 credentialed blocks `test.skip()` without `TEST_*` secrets; the anonymous and forged-cookie
 blocks need no credentials and would run everywhere — but `ci.yml` has **no Playwright job**,
-so nothing runs them in CI either. CI red at `npm test` (run #887).
+so nothing runs them in CI either. CI green through `npm run build` (run #906 on
+`0e38286`) — which for this PR verifies compilation only; the specs themselves have still
+never executed.
 
 ### Acceptance criteria
 Matrix covers every role × every protected surface ✅ written · **matrix has been executed
@@ -1045,7 +1087,7 @@ index page or redirect) · **HA-C11** (should admins be allowed the partner CSV 
 
 ## Task 3.5 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `3733af8` | PR: #355 | Environment tested: none — **Playwright never executed**
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `0e38286` | PR: #355 | Environment tested: none — **Playwright never executed** | CI: green run #906
 
 ### Current-state findings
 No coverage existed for whether rate-limit responses are *truthful* — only whether they block.
@@ -1069,7 +1111,7 @@ Per §0. `tsc` clean. **Playwright was not run.** The file is opt-in behind
 `E2E_RATE_LIMIT_TESTS=true` by design — it exhausts a shared per-IP bucket and would make the
 auth and RBAC specs fail if run alongside them. The limiter-outage block skips unless
 `E2E_LIMITER_UNAVAILABLE_BASE_URL` names a genuinely broken target, because faking an outage
-would prove nothing. CI red at `npm test` (run #887).
+would prove nothing. CI green through `npm run build` (run #906 on `0e38286`).
 
 ### Acceptance criteria
 Every scenario written ✅ · **executed once** ❌ · limiter-outage path covered ❌ (no target
@@ -1090,7 +1132,7 @@ Delete the spec file.
 
 ## Task 3.6 Evidence
 
-Status: `BLOCKED_EXTERNAL` | Branch: `task/3.6-migration-drift-and-backfill` | Commit(s): `69ed6f4` | PR: #359 | Environment tested: none — **no database was contacted**
+Status: `BLOCKED_EXTERNAL` | Branch: `task/3.6-migration-drift-and-backfill` | Commit(s): `9dc0d33` | PR: #359 | Environment tested: none — **no database was contacted** | CI: green run #902
 
 ### Current-state findings
 The repo has **40 migration files**. What the hosted production database contains is
@@ -1129,8 +1171,8 @@ pure-syntax check. **Jest was not run.** To compensate the agent compiled the cl
 executed **all 27 assertions from the test file directly: 27/27 pass**, including
 empty-history, `applied-missing-from-repo`, `in-repo-not-applied`, all six object classes, and
 the real 40-file repo inventory (unique and strictly ascending). No secret, project ref or
-connection string in any file. Only existing env var names used. CI red at `npm test`
-(run #890).
+connection string in any file. Only existing env var names used. CI green through
+`npm run build` (run #902 on `9dc0d33`).
 
 ### Acceptance criteria
 Drift can be classified from an operator export ✅ (classifier executed) · absent evidence is
@@ -1162,7 +1204,7 @@ before it is written) · **HA-B13** (escalate immediately if the export shows
 
 ## Task 3.7 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `3733af8` | PR: #355 | Environment tested: n/a — documentation
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `0e38286` | PR: #355 | Environment tested: n/a — documentation | CI: green run #906
 
 ### Current-state findings
 `docs/OPERATOR_QA_LOG.md` is **not blank** — it is extensive. It is the *manual QA table at
@@ -1190,7 +1232,8 @@ the existing mojibake, which was deliberately **not** "fixed". Verify with
 `git diff -w audit/2026-07-28-fixes -- docs/OPERATOR_QA_LOG.md`.)
 
 ### Validation executed
-Per §0. Documentation. **Every result cell is left blank.** CI red at `npm test` (run #887).
+Per §0. Documentation. **Every result cell is left blank.** CI green through
+`npm run build` (run #906 on `0e38286`).
 
 ### Acceptance criteria
 Rows 1–10 are fillable ✅ · **rows 1–10 are filled** ❌ · **G10 TRUE** ❌.
@@ -1210,7 +1253,7 @@ evidence. This is the single largest human deliverable in the programme.
 
 ## Task 4.1 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/architecture-and-governance-docs` | Commit(s): `5080fad` | PR: #351 | Environment tested: n/a
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/architecture-and-governance-docs` | Commit(s): `8698adc` | PR: #351 | Environment tested: n/a | CI: green run #909
 
 ### Current-state findings
 No launch catalog existed. Production holds three seeded QA books.
@@ -1225,7 +1268,8 @@ launch-approved** count check, a QA/seed removal table and sign-off.
 `docs/launch/LAUNCH_CATALOG.md`
 
 ### Validation executed
-Per §0. Documentation; template is empty by design. CI red at `npm test` (run #885).
+Per §0. Documentation; template is empty by design. CI green through `npm run build`
+(run #909 on `8698adc`).
 
 ### Acceptance criteria
 Template complete ✅ · **3–6 real launch titles identified** ❌ · **rights confirmed for each**
@@ -1247,7 +1291,7 @@ inclusion decisions.
 
 ## Task 4.2 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/4.2-content-intake-pipeline` | Commit(s): `72bead2` | PR: #358 | Environment tested: local `node` (CLI run end to end)
+Status: `READY_FOR_REVIEW` (now via #356) | Branch: `task/4.2-content-intake-pipeline` — **merged into `task/phase1-catalog-data-path` 2026-07-28 23:06:20 UTC by `redinc23`, branch deleted** | Commit(s): `7fb479d` (last standalone head, green run #903), merged as `9c28293` (green run #910) | PR: #358 (merged) → travels with #356 | Environment tested: local `node` (CLI run end to end)
 
 ### Current-state findings
 No definitive per-book handover spec existed, so nothing told a contributor what a complete
@@ -1282,8 +1326,13 @@ test file: 101 passed, 0 failed**, including the `0.1 + 0.2` integer-cent trap. 
 run end to end: a complete kit exits 0; the template folder (no binaries) exits 1 with the
 missing-cover blocker; a two-kit batch exits 1 with slug and ISBN collisions naming both kits;
 `--json` emits the batch result; an audio file in the kit blocks with the missing-bucket
-explanation. **Jest not run.** CI red at `npm test` (run #889). **Base is seven commits behind
-#356** — see Risks.
+explanation. **Update 2026-07-29: merged.** `redinc23` merged #358 into
+`task/phase1-catalog-data-path` at 23:06:20 UTC (branch deleted); the merge commit `9c28293`
+is green through `npm run build` (run #910) **with this task's validator tests executing
+under jest inside it**. The stale-base risk is retired by the merge, and the earlier
+reconciliation finding that the validator was *not* coded against a stale contract (contract
+files byte-identical between fork point and tip — attributed) is consistent with the clean
+merge and the green run.
 
 ### Acceptance criteria
 Intake cannot pass something the admin UI would refuse ✅ (101 executed assertions against the
@@ -1312,7 +1361,7 @@ them without networked CI).
 
 ## Task 4.5 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/5.1-5.5-launch-readiness` | Commit(s): `4b4b058` | PR: #357 | Environment tested: n/a
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/5.1-5.5-launch-readiness` | Commit(s): `7e87c56` | PR: #357 | Environment tested: n/a | CI: green run #896
 
 ### Current-state findings
 Three findings that **contradict the brief the agent was given**, all verified at `8e6fa50`
@@ -1344,7 +1393,7 @@ decisions rather than fixed, because `lib/` and `components/` are owned by other
 `docs/launch/AUTHOR_PROFILE_SPEC.md`
 
 ### Validation executed
-Per §0. Documentation. CI red at `npm test` (run #888).
+Per §0. Documentation. CI green through `npm run build` (run #896 on `7e87c56`).
 
 ### Acceptance criteria
 Spec written ✅ · **any real author profile meets it** ❌ — no real authors exist ·
@@ -1365,7 +1414,7 @@ Delete the file.
 
 ## Task 4.6 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/4.6-marketing-truthfulness` | Commit(s): `6d99621` | PR: #354 | Environment tested: none
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/4.6-marketing-truthfulness` | Commit(s): `2cb4ac5` | PR: #354 | Environment tested: none | CI: green run #901
 
 ### Current-state findings
 Public pages claimed functionality that does not exist at launch: on-site reading, mobile
@@ -1397,8 +1446,10 @@ were confirmed non-bugs and left untouched.**
 Per §0 — and **this PR's body records no verification section at all.** No static check
 result, no executed assertions, no live probe is claimed. `tests/unit/form-honesty.test.tsx`
 was updated and `tests/unit/book-clubs-honesty.test.ts` is said to still pass unchanged —
-**UNCONFIRMED; neither was run.** CI red at `npm test` (run #886), build skipped. **This is
-the weakest evidence position in the programme and the widest user-visible blast radius —
+**update 2026-07-29: both now execute under jest in CI and pass; green through
+`npm run build` (run #901 on `2cb4ac5`).** **This was the weakest evidence position in the
+programme — CI now vouches for compilation and the unit files, not the words — and it
+remains the widest user-visible blast radius —
 20 files, +514/−419, across nine public pages, the homepage, the footer and the root
 metadata.**
 
@@ -1427,7 +1478,7 @@ could not confirm `@mangupublishers`) · **HA-D4** (write a refund policy for th
 
 ## Task 5.1 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/architecture-and-governance-docs` + `task/5.1-5.5-launch-readiness` | Commit(s): `5080fad`, `4b4b058` | PR: #351 (template) + #357 (compiler) | Environment tested: local `node`, against the real template
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/architecture-and-governance-docs` + `task/5.1-5.5-launch-readiness` | Commit(s): `8698adc`, `7e87c56` | PR: #351 (template) + #357 (compiler) | Environment tested: local `node`, against the real template | CI: green run #909
 
 ### Current-state findings
 No structured place existed to record gate evidence, and no check existed for the failure
@@ -1462,11 +1513,13 @@ path: correctly caught PASSED-with-no-evidence, evidence from a different SHA,
 exception missing `mitigation` and `deadline`. Run against a missing file: `CANNOT RUN`,
 exit 2. **One real defect was found by running it and fixed before pushing** — an unanchored
 `release candidate sha` regex matched prose in §1 and read a sentence fragment as a commit
-SHA. Jest not run. CI red at `npm test` (runs #885, #888).
+SHA. Both carrying branches are now green through `npm run build` (runs #909 on
+`8698adc` and #896 on `7e87c56`).
 
 ### Acceptance criteria
 Compiler works ✅ demonstrably · template complete ✅ · **any gate evidenced** ❌ — 0 of 13 ·
-**G2 evidenced** ❌ — impossible while CI is red.
+**G2 evidenced** ❌ — no longer impossible (every mergeable branch is green), but G2 needs
+a green run on the exact release SHA on `main`, which does not exist yet.
 
 ### Risks and follow-up
 The compiler checks the **shape** of evidence, never its truth. It cannot open a link, confirm
@@ -1484,7 +1537,7 @@ not itself gate evidence.
 
 ## Task 5.2 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `7ec644e` | PR: #353 | Environment tested: **production** (read-only)
+Status: `READY_FOR_REVIEW` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `73c77f5` | PR: #353 | Environment tested: **production** (read-only) | CI: green run #905
 
 ### Current-state findings
 `app/sitemap.ts` reads the catalog through **Supabase**, not Mongo, despite
@@ -1506,7 +1559,7 @@ is reported and skipped, never fetched.
 Per §0. `tsc --strict` clean. 19 unit assertions executed outside jest within the
 67-assertion run, **including a regression test that `/audio` stays in the sitemap**.
 **`seo:check` run live against production — 0 errors, 2 warnings** (short meta descriptions on
-two seeded books). Jest not run. CI red at `npm test` (run #884).
+two seeded books). CI green through `npm run build` (run #905 on `73c77f5`).
 
 ### Acceptance criteria
 SEO issues detectable before launch ✅ demonstrated live · **canonical host issue resolved**
@@ -1526,7 +1579,7 @@ and `docs/reports/deployment/deployment_status.md`.
 
 ## Task 5.3 Evidence
 
-Status: `READY_FOR_REVIEW` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `3733af8` | PR: #355 | Environment tested: none — the harness has not been run
+Status: `READY_FOR_REVIEW` | Branch: `task/qa-automation-and-crawl-regression` | Commit(s): `0e38286` | PR: #355 | Environment tested: none — the harness has not been run | CI: green run #906
 
 ### Current-state findings
 No regression crawl existed. Production still holds seeded QA data that will be replaced by
@@ -1552,7 +1605,7 @@ Per §0. `tsc --noEmit --strict --noResolve` clean. **This caught one real defec
 `scripts/**/*.ts` **is** covered by `npm run type-check` (tsconfig excludes `tests`, not
 `scripts`), and `let ORIGIN: string` assigned inside try/catch tripped TS2454 — fixed by
 resolving the origin in an IIFE that returns or throws. **The harness has not been run against
-any target.** CI red at `npm test` (run #887).
+any target.** CI green through `npm run build` (run #906 on `0e38286`).
 
 ### Acceptance criteria
 Nothing hardcoded ✅ by inspection · "could not run" is distinguishable from "passed" ✅ ·
@@ -1576,7 +1629,7 @@ Delete the two files and the alias if added.
 
 ## Task 5.4 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `7ec644e` | PR: #353 | Environment tested: n/a — documentation
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `73c77f5` | PR: #353 | Environment tested: n/a — documentation | CI: green run #905
 
 ### Current-state findings
 No incident response procedure existed for the failure modes this platform actually has: a
@@ -1597,7 +1650,7 @@ a post-incident review template that requires at least one "detect" action item.
 Per §0. Documentation. The NXDOMAIN diagnosis path it documents **was exercised** by the
 health monitor (Task 0.4) against a non-existent ref, and the 401-is-healthy case was found
 and fixed during that work — so the interpretation table is grounded in an observation, not a
-guess. CI red at `npm test` (run #884).
+guess. CI green through `npm run build` (run #905 on `73c77f5`).
 
 ### Acceptance criteria
 Every known failure mode has a first response ✅ · **alert recipients named** ❌ ·
@@ -1617,7 +1670,7 @@ rollback and record the transcript and revision id; **G11 cannot go TRUE without
 
 ## Task 5.5 Evidence
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/5.1-5.5-launch-readiness` | Commit(s): `4b4b058` | PR: #357 | Environment tested: n/a
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/5.1-5.5-launch-readiness` | Commit(s): `7e87c56` | PR: #357 | Environment tested: n/a | CI: green run #896
 
 ### Current-state findings
 No release sequence, no rollback triggers and no launch communications existed.
@@ -1646,10 +1699,11 @@ invented**; each is a `TODO(renee):` placeholder.
 `docs/launch/RELEASE_CHECKLIST.md` (new) · `docs/launch/LAUNCH_COMMUNICATIONS.md` (new)
 
 ### Validation executed
-Per §0. Documentation. CI red at `npm test` (run #888). **This recorder verified the merge
-order recommended in §1 of the checklist against the actual git bases and found it correct**,
-with two additions the checklist does not make: #359's base is `audit/2026-07-28-fixes` (not
-#356), and #358/#360 are seven commits behind #356.
+Per §0. Documentation. CI green through `npm run build` (run #896 on `7e87c56`). **This
+recorder verified the merge order recommended in §1 of the checklist against the actual git
+bases and found it correct**, with updates as of 2026-07-29: #359's base is
+`audit/2026-07-28-fixes` (not #356); #358 is now merged into #356; #360 remains behind #356,
+and #361/#362 need refreshing (HA-A9).
 
 ### Acceptance criteria
 Rollback triggers defined ✅ · rollback procedure covers the irreversible data effects ✅ ·
@@ -1674,7 +1728,7 @@ copy).
 
 ## Section G Evidence — Environment matrix
 
-Status: `BLOCKED_EXTERNAL` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `7ec644e` | PR: #353 | Environment tested: n/a — documentation
+Status: `BLOCKED_EXTERNAL` | Branch: `task/ops-monitoring-and-launch-tooling` | Commit(s): `73c77f5` | PR: #353 | Environment tested: n/a — documentation | CI: green run #905
 
 ### Current-state findings
 No single document recorded which environment variables are required where, which are public
@@ -1693,8 +1747,8 @@ VERIFIED**.
 
 ### Validation executed
 Per §0. Documentation. Grep for secret-shaped literals across all files added by #353: **none**
-(JWT, `sb_secret_`, `sk_live_`, `whsec_`, `mongodb+srv://` shapes). CI red at `npm test`
-(run #884).
+(JWT, `sb_secret_`, `sk_live_`, `whsec_`, `mongodb+srv://` shapes). CI green through
+`npm run build` (run #905 on `73c77f5`).
 
 ### Acceptance criteria
 Every variable documented ✅ · no value committed ✅ verified · **production presence
@@ -1719,7 +1773,7 @@ present and current in production; these are the two most likely causes of the l
 
 ## Section H Evidence — Accessibility and browser matrix
 
-Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/accessibility-and-browser-matrix` | Commit(s): `c5e44a0` | PR: #360 | Environment tested: none — **no browser rendered any page**
+Status: `READY_FOR_HUMAN_ACTION` | Branch: `task/accessibility-and-browser-matrix` | Commit(s): `8bf70f91` | PR: #360 | Environment tested: none — **no browser rendered any page** | CI: green run #908
 
 ### Current-state findings
 Nineteen findings by inspection. **A11Y-001, critical:** `text-secondary` resolves to
@@ -1763,13 +1817,18 @@ covered this file. No line exceeds Prettier's `printWidth: 100`. All three files
 byte-identical after push. `git diff --stat` vs base: 3 files, 2138 insertions, 0 deletions.
 **Playwright never executed and no browser ever rendered these pages** — the PR says so under a
 heading titled "I could not run these specs" and asks that the findings be read as *"verified
-by reading the code"*, not *"observed"*. CI red at `npm test` (run #891). **Base is seven
-commits behind #356.**
+by reading the code"*, not *"observed"*. CI green through `npm run build` (run #908 on
+`8bf70f91`, which also carries this branch's own copies of the programme test fixes).
+**Base is still behind #356** (now including the merged #358). Remediation now exists in
+PR #362 — currently red at `npm test` for the inherited pre-fix-fork reason (run #899) and
+carrying a flagged `BookForm.tsx` conflict; it needs HA-A9 and the HA-C18 design sign-off.
 
 ### Acceptance criteria
-Audit complete ✅ by inspection · spec written ✅ · **spec executed** ❌ · **any finding fixed**
-❌ — no accessibility fix exists anywhere in the programme · **browser matrix filled** ❌ — it
-ships with blank pass/fail cells.
+Audit complete ✅ by inspection · spec written ✅ · **spec executed** ❌ · **any finding fixed
+and merged** ❌ — fixes for six findings now exist in PR #362 (contrast tokens, audio player
+keyboard access, skip link + `id="main-content"` target, form error association) but it is
+unmerged, red at `npm test` (run #899) and needs HA-A9 + HA-C18 · **browser matrix filled**
+❌ — it ships with blank pass/fail cells.
 
 ### Risks and follow-up
 `playwright.config.ts` runs chromium **only** in CI and no project uses a mobile viewport, so
@@ -1795,7 +1854,7 @@ six surfaces; no automation covers Firefox, WebKit or mobile).
 
 ## Section A.6 Evidence — Registration profile-creation failure
 
-Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `6f56089` | PR: #352 | Environment tested: none
+Status: `READY_FOR_REVIEW` | Branch: `task/phase1-auth-security` | Commit(s): `339218b` | PR: #352 | Environment tested: none | CI: green run #913
 
 Recorded in full under **Task 1.9** above, of which it is a part. Summary: `register/actions.ts`
 logged and continued on profile-creation failure, producing auth users with no `profiles` row
@@ -1808,13 +1867,16 @@ checked, **unrun**. Feeds Task 3.1, which no PR in this programme carries — se
 
 ## Programme-level Evidence — this PR
 
-Status: `READY_FOR_REVIEW` | Branch: `task/evidence-packet` | Commit(s): see the PR | PR: this one | Environment tested: GitHub API + a clone at `23e50c1`
+Status: `READY_FOR_REVIEW` | Branch: `task/evidence-packet` — **red at `npm test` (run #892), inherited pre-fix fork; needs HA-A9** | Commit(s): see the PR | PR: #361 (this one) | Environment tested: GitHub API + a clone at `23e50c1`; revision pass 2026-07-29 against the §0 heads
 
 ### Current-state findings
 Eleven open PRs, ~12,000 lines of change and documentation, and no single place recording what
 is verified, what is merely written, and what only Renee can do. The most important status
-fact — that CI is red everywhere and `next build` has never run — was not stated in any one
-place.
+fact at compile time — that CI was red everywhere and `next build` had never run — was not
+stated in any one place. **Update 2026-07-29: that fact has inverted** (§0): all eleven
+original branches are green through `npm run build`, #358 is merged, and the most important
+open facts are now the empty human-QA surface, the unknown hosted database, and the two
+red later branches (#361, #362).
 
 ### Changes made
 Three documents: `PROGRAMME_STATUS.md`, `EVIDENCE_PACKET.md` (this file) and
@@ -1829,7 +1891,12 @@ Every PR number, branch name, head SHA, git base, fork point, CI run number, per
 conclusion, gate state and issue state in these three documents was read from the GitHub API
 or a clone at `23e50c1` on 2026-07-28 and is reproducible. No test was run and none is
 claimed. Five corrections to the briefing facts were found and are recorded in
-`PROGRAMME_STATUS.md` §1, §2, §5 and §6.
+`PROGRAMME_STATUS.md` §1, §2, §5 and §6. **Revision pass 2026-07-29:** every open-PR state,
+branch head, latest check-run conclusion (step-level for runs #910 and #913), the #358 merge
+event (merged by `redinc23`, 23:06:20 UTC, merge commit `9c28293`) and the two red runs
+(#892, #899) were re-read from the GitHub API; the runbook cover-limit correction (5 MB
+enforced) and the `app/layout.tsx` `id="main-content"` skip-link target were verified by
+reading the files on their branches.
 
 ### Acceptance criteria
 Every task has an evidence record ✅ · every human action names the task and PR it unblocks ✅ ·
@@ -1837,8 +1904,9 @@ no unverified claim is presented as verified ✅ · no secret, project ref or cr
 ✅.
 
 ### Risks and follow-up
-These documents are a snapshot at `23e50c1`. Every SHA, CI run and base branch changes the
-moment anything merges. Re-derive before using them as gate evidence.
+These documents were compiled at `23e50c1` and revised against the 2026-07-29 heads listed
+in §0. Every SHA, CI run and base branch changes the moment anything merges. Re-derive
+before using them as gate evidence. This branch itself is red until HA-A9 is done.
 
 ### Rollback
 Delete the three files. Nothing depends on them.
