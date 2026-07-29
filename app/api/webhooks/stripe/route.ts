@@ -22,9 +22,9 @@
 
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
+import { CANONICAL_WEBHOOK_PATH } from '@/lib/stripe/webhook-paths';
 
-export const CANONICAL_WEBHOOK_PATH = '/api/webhook';
+export const dynamic = 'force-dynamic';
 
 function goneResponse(): NextResponse {
   return NextResponse.json(
