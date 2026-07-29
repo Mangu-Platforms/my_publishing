@@ -4,14 +4,25 @@
  * Fail-closed: when the limiter is unavailable in production, requests are denied.
  */
 
-import { enforceRateLimit } from '@/lib/rate-limit';
+import { enforceRateLimit, type RateLimitResult } from '@/lib/rate-limit';
+
+/**
+ * Rate limit check for authentication actions (login, register) with full
+ * result, so callers can distinguish 'limited' (too many attempts) from
+ * 'unavailable' (limiter infrastructure down — still denied, fail-closed,
+ * but the user-facing message and server logs should differ).
+ * Limits: 5 attempts per 15 minutes per IP/email
+ */
+export async function authRateLimitCheck(identifier: string): Promise<RateLimitResult> {
+  return enforceRateLimit('authAction', `auth:${identifier}`);
+}
 
 /**
  * Rate limit for authentication actions (login, register)
  * Limits: 5 attempts per 15 minutes per IP/email
  */
 export async function authRateLimit(identifier: string): Promise<boolean> {
-  const result = await enforceRateLimit('authAction', `auth:${identifier}`);
+  const result = await authRateLimitCheck(identifier);
   return result.success;
 }
 

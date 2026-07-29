@@ -6,44 +6,50 @@ import { BookOpen, CreditCard, PenTool, User, Headphones, MessageCircle } from '
 
 export const metadata: Metadata = {
   title: 'Help Center',
-  description: 'Find answers and get support for reading, purchasing, and publishing on Mangu.',
+  description: 'Answers about buying a MANGU book, your account, and sending us a manuscript.',
 };
+
+/**
+ * Task 4.6: the topic blurbs used to promise reading progress tracking,
+ * subscriptions, and web audiobook listening. None of those ship. Each line
+ * below points at something that works today.
+ */
 
 const topics = [
   {
     icon: BookOpen,
-    title: 'Reading & Library',
-    description: 'Access purchased books, track reading progress, and manage your library.',
+    title: 'Your library',
+    description: 'Find the orders you placed on this site. Books are read in your own app.',
     href: '/library',
   },
   {
     icon: CreditCard,
-    title: 'Purchases & Billing',
-    description: 'Payment methods, receipts, refunds, and subscription questions.',
+    title: 'Buying a book',
+    description: 'Where each title is sold, what we charge for, and how refunds work.',
     href: '/faqs',
   },
   {
     icon: PenTool,
-    title: 'Publishing with Mangu',
-    description: 'Submit manuscripts, track review status, and understand royalties.',
+    title: 'Publishing with MANGU',
+    description: 'Send us a manuscript, follow its review, and see how royalties are reported.',
     href: '/author/submit',
   },
   {
     icon: User,
-    title: 'Account & Profile',
-    description: 'Update your details, reset your password, and manage preferences.',
+    title: 'Account',
+    description: 'Update your details or reset your password.',
     href: '/reset-password',
   },
   {
     icon: Headphones,
-    title: 'Audiobooks',
-    description: 'Listening on the web, playback issues, and supported formats.',
+    title: 'Audio samples',
+    description: 'Where a book has audio, play the sample on its page. No full audiobooks yet.',
     href: '/audio',
   },
   {
     icon: MessageCircle,
-    title: 'Contact Support',
-    description: 'Still stuck? Our team is happy to help with anything else.',
+    title: 'Contact us',
+    description: 'Still stuck? Send a message and a person will read it.',
     href: '/contact',
   },
 ];

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Mail, ChevronDown, Globe } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { Container } from '@/components/layout/Container';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,8 +38,7 @@ const footerColumns = [
       { label: 'About Us', href: '/about' },
       { label: 'Contact', href: '/contact' },
       { label: 'Careers', href: '/careers' },
-      { label: 'Blog', href: '/blog' },
-      { label: 'Press Kit', href: '/press' },
+      { label: 'Press', href: '/press' },
     ],
   },
   {
@@ -49,7 +48,7 @@ const footerColumns = [
       { label: 'FAQs', href: '/faqs' },
       { label: 'Terms of Service', href: '/terms' },
       { label: 'Privacy Policy', href: '/privacy' },
-      { label: 'Cookie Settings', href: '/cookies' },
+      { label: 'Cookies', href: '/cookies' },
     ],
   },
 ];
@@ -73,28 +72,7 @@ function FooterLink({ href, children }: { href: string; children: React.ReactNod
   );
 }
 
-function AppStoreButton({ store, href }: { store: 'App Store' | 'Google Play'; href: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-4 py-2.5 text-left transition-all duration-200 hover:border-primary/50 hover:bg-secondary"
-    >
-      <Globe
-        className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary"
-        aria-hidden="true"
-      />
-      <div className="flex flex-col">
-        <span className="text-[10px] uppercase leading-none tracking-wide text-muted-foreground">
-          {store === 'App Store' ? 'Download on the' : 'Get it on'}
-        </span>
-        <span className="text-sm font-semibold leading-tight text-foreground">{store}</span>
-      </div>
-    </a>
-  );
-}
-
+/** Task 4.6: PayPal was removed — Stripe checkout is card-only. */
 function PaymentIcon({ name }: { name: string }) {
   return (
     <div
@@ -115,12 +93,6 @@ function PaymentIcon({ name }: { name: string }) {
           <span className="h-3 w-3 rounded-full bg-red-500/90" aria-hidden="true" />
           <span className="-ml-1.5 h-3 w-3 rounded-full bg-yellow-500/90" aria-hidden="true" />
         </div>
-      )}
-      {name === 'PayPal' && (
-        <span className="font-bold tracking-wide">
-          <span className="text-[#003087]">Pay</span>
-          <span className="text-[#009CDE]">Pal</span>
-        </span>
       )}
     </div>
   );
@@ -176,12 +148,8 @@ export function Footer({ newsletterEnabled = false }: { newsletterEnabled?: bool
               </h2>
             </Link>
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-              Your digital publishing platform for discovering and reading great books.
+              Books we publish, and where to buy them.
             </p>
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <AppStoreButton store="App Store" href="https://www.apple.com/app-store/" />
-              <AppStoreButton store="Google Play" href="https://play.google.com/store" />
-            </div>
           </div>
 
           {footerColumns.map((col) => (
@@ -201,55 +169,55 @@ export function Footer({ newsletterEnabled = false }: { newsletterEnabled?: bool
         </div>
       </Container>
 
-      <div className="border-y border-border bg-muted/30">
-        <Container>
-          <div className="flex flex-col items-start justify-between gap-6 py-10 md:flex-row md:items-center">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary" aria-hidden="true" />
-                <h3 className="text-base font-semibold text-foreground">
-                  Subscribe to our newsletter
-                </h3>
+      {/* Task 4.6: when signups are off there is no band at all. We do not
+          announce a newsletter we cannot deliver. */}
+      {newsletterEnabled && (
+        <div className="border-y border-border bg-muted/30">
+          <Container>
+            <div className="flex flex-col items-start justify-between gap-6 py-10 md:flex-row md:items-center">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-primary" aria-hidden="true" />
+                  <h3 className="text-base font-semibold text-foreground">
+                    Get an email when we publish something
+                  </h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  New titles and the occasional note from us. Leave any time.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Get the latest books and updates delivered to your inbox.
-              </p>
+              {status === 'success' ? (
+                <p className="text-sm font-medium text-primary" role="status">
+                  {feedback}
+                </p>
+              ) : (
+                <div className="w-full md:w-auto">
+                  <form className="flex w-full items-center gap-3" onSubmit={handleSubscribe}>
+                    <Input
+                      type="email"
+                      required
+                      placeholder="Enter your email"
+                      className="w-full border-border bg-background md:w-72"
+                      aria-label="Email address for newsletter"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={status === 'loading'}
+                    />
+                    <Button type="submit" className="shrink-0" disabled={status === 'loading'}>
+                      {status === 'loading' ? 'Subscribing…' : 'Subscribe'}
+                    </Button>
+                  </form>
+                  {status === 'error' && (
+                    <p role="alert" className="mt-2 text-sm text-red-500">
+                      {feedback}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-            {!newsletterEnabled ? (
-              <p className="text-sm text-muted-foreground">
-                Newsletter sign-ups are coming soon.
-              </p>
-            ) : status === 'success' ? (
-              <p className="text-sm font-medium text-primary" role="status">
-                {feedback}
-              </p>
-            ) : (
-              <div className="w-full md:w-auto">
-                <form className="flex w-full items-center gap-3" onSubmit={handleSubscribe}>
-                  <Input
-                    type="email"
-                    required
-                    placeholder="Enter your email"
-                    className="w-full border-border bg-background md:w-72"
-                    aria-label="Email address for newsletter"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={status === 'loading'}
-                  />
-                  <Button type="submit" className="shrink-0" disabled={status === 'loading'}>
-                    {status === 'loading' ? 'Subscribing…' : 'Subscribe'}
-                  </Button>
-                </form>
-                {status === 'error' && (
-                  <p role="alert" className="mt-2 text-sm text-red-500">
-                    {feedback}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </Container>
-      </div>
+          </Container>
+        </div>
+      )}
 
       <div className="bg-muted/20">
         <Container>
@@ -261,7 +229,6 @@ export function Footer({ newsletterEnabled = false }: { newsletterEnabled?: bool
               <PaymentIcon name="Visa" />
               <PaymentIcon name="Mastercard" />
               <PaymentIcon name="Stripe" />
-              <PaymentIcon name="PayPal" />
             </div>
             <div className="flex items-center gap-4">
               <span className="text-xs text-muted-foreground">
@@ -271,15 +238,6 @@ export function Footer({ newsletterEnabled = false }: { newsletterEnabled?: bool
                 </span>{' '}
                 for book lovers
               </span>
-              <button
-                type="button"
-                aria-label="Select language"
-                className="hidden items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 sm:flex"
-              >
-                <Globe className="h-3 w-3" aria-hidden="true" />
-                <span>EN</span>
-                <ChevronDown className="h-3 w-3" aria-hidden="true" />
-              </button>
             </div>
           </div>
         </Container>

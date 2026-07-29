@@ -5,40 +5,21 @@ import { betterAuthSignUp } from '@/lib/auth/better-auth-actions';
 import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
-import { authRateLimit, getAuthIdentifier } from '@/lib/utils/auth-rate-limit';
+import { authRateLimitCheck, getAuthIdentifier } from '@/lib/utils/auth-rate-limit';
 import { toFriendlyRegisterError } from '@/lib/auth/register-errors';
+import { normalizeAuthErrorMessage, redactAuthDiagnostic } from '@/lib/auth/error-messages';
+import { resolveAuthOriginFromHeaders } from '@/lib/auth/origin';
+import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_MESSAGE_LONG } from '@/lib/auth/password-policy';
 import { sendWelcomeEmail } from '@/lib/email/messages';
 import { headers } from 'next/headers';
 
-function normalizeOrigin(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  return value.trim().replace(/\/+$/, '');
-}
-
+/**
+ * Task 1.9: verification deep links are built from the CONFIGURED origin.
+ * The previous implementation trusted `x-forwarded-host` first, so a forged
+ * host header could steer `emailRedirectTo` at a host we do not control.
+ */
 async function resolveAuthOrigin() {
-  const headersList = await headers();
-  const host = headersList.get('x-forwarded-host') || headersList.get('host');
-  const proto = headersList.get('x-forwarded-proto') || 'http';
-  const requestOrigin = host ? `${proto}://${host.split(',')[0].trim()}` : null;
-  const configuredOrigin = normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL);
-  const vercelUrl = normalizeOrigin(process.env.VERCEL_URL);
-
-  if (requestOrigin) {
-    return normalizeOrigin(requestOrigin)!;
-  }
-
-  if (configuredOrigin) {
-    return configuredOrigin;
-  }
-
-  if (vercelUrl) {
-    return `https://${vercelUrl.replace(/^https?:\/\//, '')}`;
-  }
-
-  return 'http://localhost:3001';
+  return resolveAuthOriginFromHeaders(await headers());
 }
 
 export async function registerUser(formData: FormData) {
@@ -53,7 +34,17 @@ export async function registerUser(formData: FormData) {
   const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || null;
   const identifier = getAuthIdentifier(ip, normalizedEmail);
 
-  if (!(await authRateLimit(identifier))) {
+  const rate = await authRateLimitCheck(identifier);
+  if (!rate.success) {
+    if (rate.reason === 'unavailable') {
+      console.error(
+        '[auth] Rate limiter unavailable — registration blocked for ALL users. ' +
+          'Check UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN in this environment.'
+      );
+      return {
+        error: 'Registration is temporarily unavailable. Please try again in a few minutes.',
+      };
+    }
     return { error: 'Too many registration attempts. Please try again in 15 minutes.' };
   }
 
@@ -68,8 +59,8 @@ export async function registerUser(formData: FormData) {
     return { error: 'Please enter a valid email address' };
   }
 
-  if (password.length < 6) {
-    return { error: 'Password must be at least 6 characters long' };
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return { error: PASSWORD_MIN_MESSAGE_LONG };
   }
 
   if (fullName.trim().length < 2) {
@@ -77,16 +68,14 @@ export async function registerUser(formData: FormData) {
   }
 
   if (isBetterAuthPrimary()) {
-    if (password.length < 8) {
-      return { error: 'Password must be at least 8 characters long' };
-    }
+    // Length already enforced above from the single policy source.
     const ba = await betterAuthSignUp({
       email: normalizedEmail,
       password,
       name: fullName.trim(),
     });
     if (ba.error) {
-      return { error: toFriendlyRegisterError(ba.error) };
+      return { error: toFriendlyRegisterError(normalizeAuthErrorMessage(ba.error)) };
     }
     try {
       await sendWelcomeEmail({ to: normalizedEmail, userName: fullName.trim() });
@@ -136,7 +125,8 @@ export async function registerUser(formData: FormData) {
     });
 
     if (authError) {
-      return { error: toFriendlyRegisterError(authError.message) };
+      console.error('[auth] Supabase sign-up rejected:', redactAuthDiagnostic(authError));
+      return { error: toFriendlyRegisterError(normalizeAuthErrorMessage(authError)) };
     }
 
     if (!authData.user) {
@@ -171,8 +161,21 @@ export async function registerUser(formData: FormData) {
       });
 
       if (profileError && !profileError.message.includes('duplicate key')) {
-        console.error('Profile creation error:', profileError);
-        // Don't fail registration if profile creation fails - user can complete setup later
+        // A.6 (Task 1.9): this used to be swallowed with "user can complete
+        // setup later", which produced auth users with no profile row and
+        // therefore no role — they silently lost every role-gated surface.
+        // Surface it instead. The auth user already exists, so the copy tells
+        // the user their account was created but setup did not finish.
+        console.error(
+          '[auth] Profile creation failed after sign-up:',
+          redactAuthDiagnostic(profileError)
+        );
+        return {
+          error:
+            'Your account was created, but we could not finish setting up your profile. ' +
+            'Please try signing in — if the problem continues, contact us from the Contact page.',
+          profileSetupFailed: true,
+        };
       }
     }
 
@@ -192,7 +195,7 @@ export async function registerUser(formData: FormData) {
       verificationEmail: needsVerification ? normalizedEmail : undefined,
     };
   } catch (error) {
-    console.error('Unexpected error during registration:', error);
+    console.error('[auth] Unexpected error during registration:', redactAuthDiagnostic(error));
     return { error: 'An unexpected error occurred. Please try again.' };
   }
 }

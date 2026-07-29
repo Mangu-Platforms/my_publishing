@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 import { getAuthProvider } from '@/lib/auth/provider';
-import { MANGU_ROLE_COOKIE, normalizeManguRole } from '@/lib/auth/roles';
 import { enforceRateLimit, getRateLimitIdentity } from '@/lib/rate-limit';
 import { buildRateLimitResponse } from '@/lib/rate-limit-response';
 import { getEdgeAuthUser, getEdgeUserRole } from '@/lib/supabase/edge-auth';
@@ -12,6 +11,29 @@ function rateLimitRejection(
   result: { reason: string; headers: Record<string, string> }
 ) {
   return buildRateLimitResponse(request, result);
+}
+
+/**
+ * Fail-closed response for when authentication CANNOT be verified at the Edge
+ * (Task 1.5). Returned instead of silently allowing a protected request
+ * through unauthenticated.
+ */
+function authUnavailableResponse(request: NextRequest) {
+  const isApi = request.nextUrl.pathname.startsWith('/api/');
+  const body = isApi
+    ? JSON.stringify({
+        error: 'auth_unavailable',
+        message: 'Authentication is temporarily unavailable.',
+      })
+    : 'Authentication is temporarily unavailable. Please try again shortly.';
+
+  return new NextResponse(body, {
+    status: 503,
+    headers: {
+      'Content-Type': isApi ? 'application/json' : 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  });
 }
 
 function loginRedirect(request: NextRequest, pathname: string) {
@@ -101,8 +123,8 @@ export async function middleware(request: NextRequest) {
 
   try {
     // ── Phoenix WS1: Better Auth cookie-only Edge path ───────────────────────
-    // RBAC strategy: optimistic session cookie + optional mangu-role cookie for
-    // coarse portal gates; fine-grained checks stay in server layouts/actions.
+    // RBAC strategy: session-cookie presence gates protected paths at the Edge;
+    // every ROLE decision is made server-side in the layouts/actions.
     if (getAuthProvider() === 'better-auth') {
       const sessionCookie = getSessionCookie(request);
       const userId = sessionCookie ? 'session' : null;
@@ -115,28 +137,33 @@ export async function middleware(request: NextRequest) {
         return loginRedirect(request, pathname);
       }
 
-      if (userId && (isAdminRoute || isAuthorRoute || isPartnerRoute)) {
-        const role = normalizeManguRole(request.cookies.get(MANGU_ROLE_COOKIE)?.value);
-
-        if (isAdminRoute && role !== 'admin') {
-          return NextResponse.redirect(new URL('/', request.url));
-        }
-        if (isAuthorRoute && role !== 'author' && role !== 'admin') {
-          return NextResponse.redirect(new URL('/', request.url));
-        }
-        if (isPartnerRoute && role !== 'partner' && role !== 'admin') {
-          return NextResponse.redirect(new URL('/', request.url));
-        }
-      }
-
+      // Task 1.5: the `mangu-role` cookie is UNSIGNED and client-settable, so it
+      // is presentation state only and MUST NOT be read as an authorization
+      // decision here. Role enforcement is server-side, derived from the
+      // authenticated session + trusted profile/claims:
+      //   /admin   -> app/admin/layout.tsx           (requireAdmin)
+      //   /author  -> app/(portals)/author/layout.tsx  (requireRole)
+      //   /partner -> app/(portals)/partner/layout.tsx (requireRole)
+      // Middleware here only enforces "must be signed in" for protected paths.
       return response;
     }
 
     // ── Legacy Supabase Edge path (public production until cutover) ──────────
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      // Task 1.5 — FAIL CLOSED. This branch used to log and continue, which
+      // served every protected route (/admin, /author, /partner, /dashboard,
+      // /library, /reading, /api/files) completely ungated whenever the
+      // Supabase env vars were absent. Public marketing/catalog routes still
+      // render; anything protected is refused with 503.
       console.error(
-        'Missing Supabase environment variables. Check .env.local.example for setup instructions.'
+        'Missing Supabase environment variables — Edge auth cannot be verified. ' +
+          'Protected routes are denied (fail-closed). See .env.local.example.'
       );
+
+      if (isProtectedPath(pathname)) {
+        return authUnavailableResponse(request);
+      }
+
       return response;
     }
 

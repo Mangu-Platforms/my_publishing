@@ -8,7 +8,6 @@ import {
   BookOpen,
   Heart,
   Highlighter,
-  MapPin,
   StickyNote,
   Trash2,
   UserCheck,
@@ -199,15 +198,9 @@ export function ReadersHubTabs({
                 </Link>
               )}
               <span>{formatDate(h.created_at)}</span>
-              {h.position && (
-                <Link
-                  href={`/reading/${h.book_id}`}
-                  className="flex items-center gap-1 transition-colors hover:text-primary"
-                >
-                  <MapPin className="h-3.5 w-3.5" />
-                  Open in reader
-                </Link>
-              )}
+              {/* Task 1.7: "Open in reader" pointed at a stub route. MANGU has
+                  no on-site reader, so the highlight keeps its saved position
+                  without offering a link that cannot work. */}
             </div>
           </div>
           <Button

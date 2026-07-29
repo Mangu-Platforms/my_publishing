@@ -2,11 +2,19 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { type NextRequest } from 'next/server';
 
+/** Only allow same-origin path redirects (never absolute/protocol-relative URLs). */
+function sanitizeNextPath(next: string | null): string {
+  if (!next) return '/';
+  if (!next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/';
+  return next;
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const error = requestUrl.searchParams.get('error');
   const errorDescription = requestUrl.searchParams.get('error_description');
+  const nextPath = sanitizeNextPath(requestUrl.searchParams.get('next'));
 
   // Handle OAuth errors
   if (error) {
@@ -47,8 +55,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Success - redirect to home
-    return NextResponse.redirect(new URL('/', requestUrl.origin));
+    // Success - redirect to the requested destination (or home)
+    return NextResponse.redirect(new URL(nextPath, requestUrl.origin));
   } catch (error) {
     console.error('Unexpected error in OAuth callback:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';

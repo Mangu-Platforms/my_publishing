@@ -58,6 +58,7 @@ logs/
 
 # OS files
 Thumbs.db
+desktop.ini
 nexus_analysis/
 nexus_analysis_rollout/
 nexus_rollout_results/

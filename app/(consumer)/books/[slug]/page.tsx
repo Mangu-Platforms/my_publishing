@@ -18,6 +18,9 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import type { ApiBook } from '@/lib/data/books';
 import { getSiteUrl } from '@/lib/seo/siteUrl';
+// External retailer links (populated via /admin/books/[id]/edit) — field list,
+// labels and https validation live in the shared book field contract.
+import { retailerLinksFrom } from '@/lib/books/fields';
 
 async function getBook(slug: string): Promise<ApiBook | null> {
   return fetchBookForApi({ slug });
@@ -100,6 +103,7 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
     | string
     | undefined;
   const audioUrl = (book as Record<string, unknown>)['audio_url'] as string | undefined;
+  const retailerLinks = retailerLinksFrom(book);
 
   return (
     <div>
@@ -148,9 +152,6 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
               </div>
               <p className="mb-6 text-lg">{book.description}</p>
               <div className="mb-6 flex gap-4">
-                <Button asChild size="lg">
-                  <Link href={`/reading/${book.id}`}>Start Reading</Link>
-                </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href={`/checkout?book_id=${book.id}`}>Purchase</Link>
                 </Button>
@@ -166,6 +167,22 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
                   <span>${book.price}</span>
                 )}
               </div>
+              {retailerLinks.length > 0 && (
+                <div className="mt-6">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-secondary">
+                    Also available at
+                  </h2>
+                  <div className="flex flex-wrap gap-3">
+                    {retailerLinks.map(({ label, url }) => (
+                      <Button key={label} asChild variant="outline" size="sm">
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          {label}
+                        </a>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Container>

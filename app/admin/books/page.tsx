@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { updateBookStatusAction } from '../actions';
 import { AdminQueryError } from '../_lib/query-error';
 import { listAdminBooks } from '@/lib/data/admin-books';
+import { StatusToggleForm } from './_lib/StatusToggleForm';
+import { priceInputFromStored } from './_lib/book-validation';
 
 const PAGE_SIZE = 10;
 
@@ -107,20 +109,19 @@ export default async function AdminBooksPage({
                           {book.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3">${book.price}</td>
+                      <td className="px-4 py-3">
+                        {/* Rendered from the shared decimal-safe formatter so the
+                            table never shows a float artefact like 9.989999. */}
+                        {book.price != null ? `$${priceInputFromStored(book.price)}` : '—'}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <form action={updateBookStatusAction}>
-                            <input type="hidden" name="bookId" value={book.id} />
-                            <input
-                              type="hidden"
-                              name="status"
-                              value={book.status === 'published' ? 'draft' : 'published'}
-                            />
-                            <Button variant="outline" size="sm" type="submit">
-                              {book.status === 'published' ? 'Unpublish' : 'Publish'}
-                            </Button>
-                          </form>
+                          <StatusToggleForm
+                            bookId={book.id}
+                            title={book.title}
+                            status={book.status}
+                            action={updateBookStatusAction}
+                          />
                           <Button asChild variant="outline" size="sm">
                             <Link href={`/admin/books/${book.id}/edit`}>Edit</Link>
                           </Button>

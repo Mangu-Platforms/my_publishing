@@ -12,8 +12,19 @@
     --popover-foreground: 222.2 84% 4.9%;
     --primary: 0 84% 60%;
     --primary-foreground: 210 40% 98%;
+    /* Solid-fill red for white button text. WHY: white on --primary is only
+       3.78:1 (A11Y-002), but --primary itself must stay this light or
+       `text-primary` drops below AA on the dark surfaces it is used on. Not
+       re-declared in .dark — a filled button does not re-theme. 4.87:1. */
+    --primary-strong: 0 84% 48%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary-importance *text*. WHY: --secondary is a surface token, so
+       painting copy with it gives 1.10:1 on the page and 1.00:1 inside
+       `bg-muted` (A11Y-001). This is its text-only sibling: 5.11:1 on the page
+       background, 4.66:1 on `bg-muted`/`bg-secondary`. Not the same thing as
+       --secondary-foreground, which is text *on* a secondary surface. */
+    --text-secondary: 215.4 16.3% 45%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
@@ -37,6 +48,8 @@
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
+    /* See :root. 7.80:1 on the page background, 5.71:1 on `bg-muted`. */
+    --text-secondary: 215 20.2% 65.1%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
     --accent: 217.2 32.6% 17.5%;
