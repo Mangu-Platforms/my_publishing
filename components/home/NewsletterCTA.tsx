@@ -7,6 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Mail, CheckCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+/**
+ * Task 4.6: when the provider is not configured this section does not render.
+ * A "coming soon" banner is a promise about a date nobody has set.
+ */
 export function NewsletterCTA({ enabled = true }: { enabled?: boolean }) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -45,6 +49,9 @@ export function NewsletterCTA({ enabled = true }: { enabled?: boolean }) {
       setStatus('error');
     }
   };
+
+  // Nothing to show when signups are off.
+  if (!enabled) return null;
 
   return (
     <section
@@ -86,78 +93,67 @@ export function NewsletterCTA({ enabled = true }: { enabled?: boolean }) {
           </h2>
 
           <p className="mb-8 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Get personalized book recommendations and exclusive author updates delivered to your
-            inbox.
+            We email you when we publish a new book. That is the whole newsletter.
           </p>
 
-          {!enabled ? (
-            <div className="mx-auto max-w-md rounded-md border border-border/60 bg-background/40 px-6 py-5">
-              <p className="text-base font-medium text-muted-foreground">
-                Newsletter sign-ups are coming soon.
-              </p>
-            </div>
-          ) : (
-            <>
-              <AnimatePresence mode="wait">
-                {status === 'success' ? (
-                  <motion.div
-                    key="success"
-                    role="status"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    className="flex items-center justify-center gap-3 py-4"
-                  >
-                    <CheckCircle className="h-6 w-6 text-green-400" />
-                    <span className="text-lg font-medium text-green-400">{successMessage}</span>
-                  </motion.div>
-                ) : (
-                  <motion.form
-                    key="form"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onSubmit={handleSubmit}
-                    className="mx-auto flex max-w-md flex-col gap-3 sm:flex-row"
-                  >
-                    <Input
-                      type="email"
-                      aria-label="Email address"
-                      placeholder="Enter your email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-12 flex-1 border-border/60 bg-background/80 placeholder:text-muted-foreground/70"
-                      required
-                    />
-                    <Button
-                      type="submit"
-                      disabled={status === 'loading'}
-                      className="h-12 rounded-md px-8 font-semibold"
-                    >
-                      {status === 'loading' ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Subscribing...
-                        </>
-                      ) : (
-                        'Subscribe'
-                      )}
-                    </Button>
-                  </motion.form>
-                )}
-              </AnimatePresence>
+          <AnimatePresence mode="wait">
+            {status === 'success' ? (
+              <motion.div
+                key="success"
+                role="status"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="flex items-center justify-center gap-3 py-4"
+              >
+                <CheckCircle className="h-6 w-6 text-green-400" />
+                <span className="text-lg font-medium text-green-400">{successMessage}</span>
+              </motion.div>
+            ) : (
+              <motion.form
+                key="form"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onSubmit={handleSubmit}
+                className="mx-auto flex max-w-md flex-col gap-3 sm:flex-row"
+              >
+                <Input
+                  type="email"
+                  aria-label="Email address"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-12 flex-1 border-border/60 bg-background/80 placeholder:text-muted-foreground/70"
+                  required
+                />
+                <Button
+                  type="submit"
+                  disabled={status === 'loading'}
+                  className="h-12 rounded-md px-8 font-semibold"
+                >
+                  {status === 'loading' ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Subscribing...
+                    </>
+                  ) : (
+                    'Subscribe'
+                  )}
+                </Button>
+              </motion.form>
+            )}
+          </AnimatePresence>
 
-              {status === 'error' && (
-                <p role="alert" className="mt-3 text-sm text-red-400">
-                  {errorMessage}
-                </p>
-              )}
-
-              <p className="mt-4 text-xs text-muted-foreground/60">
-                No spam, ever. Unsubscribe anytime.
-              </p>
-            </>
+          {status === 'error' && (
+            <p role="alert" className="mt-3 text-sm text-red-400">
+              {errorMessage}
+            </p>
           )}
+
+          <p className="mt-4 text-xs text-muted-foreground/60">
+            Every email has an unsubscribe link.
+          </p>
         </motion.div>
       </Container>
     </section>

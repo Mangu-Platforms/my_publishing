@@ -1,7 +1,7 @@
 {
   "name": "MANGU Publishers",
   "short_name": "MANGU",
-  "description": "Your digital publishing platform for discovering and reading great books.",
+  "description": "Books published by MANGU Publishers, and where to buy them.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

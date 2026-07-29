@@ -28,8 +28,9 @@ const inter = localFont({
 
 const SITE_URL = getSiteUrl();
 const SITE_NAME = 'MANGU Publishers';
+// Task 4.6: no streaming, no unlimited reading, no video. Say what is true.
 const SITE_DESCRIPTION =
-  'Discover a universe of stories. Stream unlimited books, audiobooks, and exclusive videos anywhere, anytime.';
+  'Browse the books MANGU Publishers has released and find out where to buy each one.';
 
 export const metadata: Metadata = {
   title: {
@@ -41,22 +42,13 @@ export const metadata: Metadata = {
     'books',
     'publishing',
     'ebooks',
-    'reading',
     'authors',
-    'digital library',
     'MANGU',
-    'audiobooks',
-    'book platform',
-    'self-publishing',
-    'independent authors',
-    'online reading',
+    'MANGU Publishers',
+    'independent publisher',
     'book discovery',
     'literary fiction',
     'non-fiction',
-    'comics',
-    'manga',
-    'academic papers',
-    'digital content',
   ],
   authors: [{ name: SITE_NAME }],
   creator: SITE_NAME,
@@ -95,6 +87,8 @@ export const metadata: Metadata = {
     title: `${SITE_NAME} - Digital Publishing Platform`,
     description: SITE_DESCRIPTION,
     images: ['/og-image.png'],
+    // TODO(renee): confirm @mangupublishers is an account we actually control.
+    // If it is not ours, these two lines should be removed before launch.
     creator: '@mangupublishers',
     site: '@mangupublishers',
   },
@@ -135,9 +129,9 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // Honest gating (P0-013): the footer newsletter form is only interactive
-  // when the email provider is configured; otherwise it shows an honest
-  // "coming soon" state instead of faking subscriptions.
+  // Honest gating (P0-013, Task 4.6): the footer newsletter form only exists
+  // when the email provider is configured. When it isn't, the whole band is
+  // absent — no form, and no promise of one later.
   const newsletterEnabled = isEmailConfigured();
 
   return (
@@ -153,7 +147,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WebSiteJsonLd
           name={SITE_NAME}
           url={SITE_URL}
-          description="Discover, read, and publish books on the MANGU platform"
+          description="Books published by MANGU Publishers, and where to buy them"
           searchUrl={`${SITE_URL}/books?search={search_term_string}`}
         />
       </head>

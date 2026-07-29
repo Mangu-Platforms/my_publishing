@@ -1,62 +1,23 @@
+import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Container } from '@/components/layout/Container';
-import { Section } from '@/components/layout/Section';
-import { Button } from '@/components/ui/button';
-import { BookOpen } from 'lucide-react';
-import { getSiteUrl } from '@/lib/seo/siteUrl';
 
-const pageUrl = `${getSiteUrl()}/blog`;
-const description = 'News, publishing insights, and stories from the Mangu Publishers team.';
-
+/**
+ * Task 4.6 — /blog is switched off.
+ *
+ * There are no posts, and a page that says "first post coming soon" is a
+ * promise we have not kept. Until a real post exists this route 404s and the
+ * footer link is gone; the sitemap already excludes /blog (P-004).
+ *
+ * To bring it back: replace this file with a real index that lists real posts.
+ */
 export const metadata: Metadata = {
-  title: 'Blog',
-  description,
-  alternates: {
-    canonical: pageUrl,
-  },
-  openGraph: {
-    title: 'Blog',
-    description,
-    url: pageUrl,
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'MANGU Publishers - Your digital publishing platform',
-      },
-    ],
-  },
+  title: 'Not found',
+  robots: { index: false, follow: false },
 };
 
 export default function BlogPage() {
-  return (
-    <div>
-      <Section className="bg-muted">
-        <Container>
-          <h1 className="mb-2 text-4xl font-bold">The Mangu Blog</h1>
-          <p className="max-w-2xl text-secondary">
-            News, publishing insights, and stories from the team.
-          </p>
-        </Container>
-      </Section>
-
-      <Section>
-        <Container>
-          <div className="py-12 text-center">
-            <BookOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <h2 className="mb-2 text-2xl font-semibold">First post coming soon</h2>
-            <p className="mx-auto mb-6 max-w-xl text-secondary">
-              We&apos;re working on our first stories. In the meantime, explore what&apos;s trending
-              on the platform.
-            </p>
-            <Button asChild>
-              <Link href="/books">Browse Books</Link>
-            </Button>
-          </div>
-        </Container>
-      </Section>
-    </div>
-  );
+  notFound();
+  // notFound() throws, so this never runs. It is here so the component has a
+  // ReactNode return type rather than void.
+  return null;
 }

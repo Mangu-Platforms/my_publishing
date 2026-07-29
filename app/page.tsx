@@ -18,17 +18,19 @@ import { getSiteUrl } from '@/lib/seo/siteUrl';
 import { isEmailConfigured } from '@/lib/email/send';
 
 export const metadata: Metadata = {
-  title: 'Digital Publishing Platform',
+  title: 'Books from MANGU Publishers',
   description:
-    'Discover books, audiobooks, comics, papers, and independent authors on MANGU Publishers.',
+    'Browse the books MANGU Publishers has released and find out where to buy each one.',
 };
 
 export default function HomePage() {
   const siteUrl = getSiteUrl();
   const emailEnabled = isEmailConfigured();
-  const pageTitle = 'MANGU Publishers - Digital Publishing Platform';
+  const pageTitle = 'MANGU Publishers';
+  // Task 4.6: the old line promised streaming, unlimited reading and video.
+  // None of that exists. This describes what the site actually is.
   const pageDescription =
-    'Discover a universe of stories. Stream unlimited books, audiobooks, and exclusive videos anywhere, anytime.';
+    'Browse the books MANGU Publishers has released and find out where to buy each one.';
 
   return (
     <div className="relative">
@@ -100,8 +102,7 @@ export default function HomePage() {
 
             {/* Subtitle */}
             <p className="mb-10 max-w-2xl animate-slide-up text-lg font-light leading-relaxed text-white/85 sm:text-xl">
-              Discover a universe of stories. Stream unlimited books, audiobooks, and exclusive
-              videos anywhere, anytime.
+              The books we publish, and where to buy them. Take your time.
             </p>
 
             {/* CTA Buttons */}
@@ -112,7 +113,7 @@ export default function HomePage() {
                 className="rounded-full px-8 py-6 text-base font-semibold shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               >
                 <Link href="/books">
-                  Explore Library
+                  Browse the books
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
@@ -122,7 +123,7 @@ export default function HomePage() {
                 size="lg"
                 className="rounded-full border-white/30 bg-white/5 px-8 py-6 text-base font-semibold text-white transition-all duration-300 hover:-translate-y-1 hover:bg-white/10 hover:text-white"
               >
-                <Link href="/about">Learn More</Link>
+                <Link href="/about">About MANGU</Link>
               </Button>
             </div>
           </div>

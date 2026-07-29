@@ -6,8 +6,9 @@
  *   - no success is ever shown before the backend confirms the side effect;
  *   - failures render real, assistive-tech-announced error states
  *     (role="alert"; success uses role="status", CCR-019);
- *   - when the email provider is not configured, both surfaces render honest
- *     "unavailable" states instead of forms that cannot deliver;
+ *   - when the email provider is not configured, the contact form is replaced
+ *     by a working mailto and the newsletter surfaces disappear entirely
+ *     (Task 4.6: no form that cannot deliver, and no "coming soon" promise);
  *   - the footer newsletter form posts to the real double opt-in endpoint —
  *     the previous implementation faked a subscription with zero network I/O.
  */
@@ -84,17 +85,25 @@ function mockFetchResponse(response: {
 }
 
 describe('Footer newsletter form (P0-013)', () => {
-  it('shows an honest "coming soon" state and no form when signups are disabled', () => {
+  it('renders no newsletter band at all when signups are disabled (Task 4.6)', () => {
     render(<Footer newsletterEnabled={false} />);
-    expect(screen.getByText(/newsletter sign-ups are coming soon/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/email address for newsletter/i)).not.toBeInTheDocument();
+    // No promise of a future newsletter either.
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/get an email when we publish/i)).not.toBeInTheDocument();
   });
 
-  it('defaults to the honest disabled state when the prop is omitted', () => {
+  it('defaults to the hidden state when the prop is omitted', () => {
     render(<Footer />);
-    expect(screen.getByText(/newsletter sign-ups are coming soon/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+  });
+
+  it('never links to an app store (there are no mobile apps)', () => {
+    render(<Footer newsletterEnabled={false} />);
+    expect(screen.queryByText(/app store/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/google play/i)).not.toBeInTheDocument();
   });
 
   it('posts to /api/newsletter and shows the server message only after the backend confirms', async () => {
@@ -170,9 +179,9 @@ describe('Footer newsletter form (P0-013)', () => {
 });
 
 describe('NewsletterCTA (P0-013)', () => {
-  it('shows an honest "coming soon" state and no form when disabled', () => {
-    render(<NewsletterCTA enabled={false} />);
-    expect(screen.getByText(/newsletter sign-ups are coming soon/i)).toBeInTheDocument();
+  it('renders nothing when disabled — no form and no promise (Task 4.6)', () => {
+    const { container } = render(<NewsletterCTA enabled={false} />);
+    expect(container).toBeEmptyDOMElement();
     expect(screen.queryByRole('button', { name: /subscribe/i })).not.toBeInTheDocument();
   });
 
@@ -214,7 +223,7 @@ describe('NewsletterCTA (P0-013)', () => {
 describe('ContactForm (P0-012)', () => {
   it('shows an honest unavailable state with a real mailto address when email is not configured', () => {
     render(<ContactForm enabled={false} fallbackEmail="books@mangu-publishers.com" />);
-    expect(screen.getByText(/being set up/i)).toBeInTheDocument();
+    expect(screen.getByText(/message form is switched off/i)).toBeInTheDocument();
     const mailto = screen.getByRole('link', { name: 'books@mangu-publishers.com' });
     expect(mailto).toHaveAttribute('href', 'mailto:books@mangu-publishers.com');
     expect(screen.queryByRole('button', { name: /send message/i })).not.toBeInTheDocument();

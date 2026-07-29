@@ -43,12 +43,12 @@ export default function PrivacyPage() {
             <section>
               <h2 className="mb-2 text-2xl font-semibold text-foreground">Cookies</h2>
               <p>
-                We use essential cookies to keep you signed in and remember your preferences. See
-                our{' '}
+                We use essential cookies to keep you signed in. We do not use analytics or
+                advertising cookies. See our{' '}
                 <a href="/cookies" className="text-primary hover:underline">
-                  cookie settings
+                  cookies page
                 </a>{' '}
-                page for details.
+                for details.
               </p>
             </section>
 

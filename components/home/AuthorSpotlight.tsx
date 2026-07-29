@@ -1,8 +1,14 @@
 import Link from 'next/link';
 import { listFeaturedAuthors } from '@/lib/data/authors';
 import { Container } from '@/components/layout/Container';
-import { Users } from 'lucide-react';
 
+/**
+ * Task 4.6 — spotlight only real authors.
+ *
+ * Rules: an author needs at least one published book to appear (otherwise the
+ * card reads "0 books published"), we never invent a bio, and when there is
+ * nobody to show the section renders nothing rather than "stay tuned".
+ */
 export async function AuthorSpotlight() {
   let authors: Awaited<ReturnType<typeof listFeaturedAuthors>> = [];
   try {
@@ -12,20 +18,11 @@ export async function AuthorSpotlight() {
     authors = [];
   }
 
-  if (authors.length === 0) {
-    return (
-      <section className="bg-background py-16">
-        <Container>
-          <div className="py-12 text-center">
-            <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <h2 className="mb-2 text-2xl font-semibold">Author Spotlight</h2>
-            <p className="text-muted-foreground">
-              Our authors will be featured here soon. Stay tuned!
-            </p>
-          </div>
-        </Container>
-      </section>
-    );
+  // Only authors with something published are worth spotlighting.
+  const featured = authors.filter((author) => author.total_books > 0);
+
+  if (featured.length === 0) {
+    return null;
   }
 
   return (
@@ -37,13 +34,13 @@ export async function AuthorSpotlight() {
               Author Spotlight
             </h2>
             <p className="text-sm text-muted-foreground">
-              Meet the brilliant minds behind our stories
+              The people behind the books we publish
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {authors.map((author) => (
+          {featured.map((author) => (
             <Link key={author.id} href={`/authors/${author.id}`} className="group">
               <div className="relative overflow-hidden rounded-xl border border-border/60 bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5">
                 <div className="mb-4 flex justify-center">
@@ -61,9 +58,9 @@ export async function AuthorSpotlight() {
                   {author.profile?.full_name && author.profile.full_name !== author.pen_name && (
                     <p className="mb-2 text-sm text-muted-foreground">{author.profile.full_name}</p>
                   )}
-                  <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">
-                    {author.bio || 'An amazing author contributing to our platform.'}
-                  </p>
+                  {author.bio && (
+                    <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">{author.bio}</p>
+                  )}
                   <p className="text-xs font-medium text-primary/80">
                     {author.total_books} {author.total_books === 1 ? 'book' : 'books'} published
                   </p>
