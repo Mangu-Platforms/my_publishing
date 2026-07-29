@@ -842,15 +842,12 @@ test.describe('Contrast', () => {
 // ===========================================================================
 
 test.describe('Bypass blocks', () => {
-  test.fixme('a skip link moves focus to the main landmark', async ({ page }) => {
-    // A11Y-007: half fixed. components/shared/Header.tsx now renders a
-    // "Skip to main content" link, hidden until focused, pointing at
-    // #main-content — but app/layout.tsx still renders a bare
-    // <main className="flex-1">. Enable this once that becomes
-    // <main id="main-content" tabIndex={-1} className="flex-1">: without the
-    // id the fragment resolves to nothing, and without tabindex=-1 following
-    // it moves the scroll position but not focus, so the assertion below
-    // cannot pass. WCAG 2.1 2.4.1, Level A.
+  test('a skip link moves focus to the main landmark', async ({ page }) => {
+    // A11Y-007 (fixed): components/shared/Header.tsx renders a
+    // "Skip to main content" link, hidden until focused, and app/layout.tsx
+    // gives <main> the matching id="main-content" and tabIndex={-1} (#363),
+    // so following the link moves keyboard focus into the main landmark.
+    // First verified against production 2026-07-29. WCAG 2.1 2.4.1, Level A.
     await page.goto('/books');
     await page.locator('body').press('Tab');
     const skip = page.getByRole('link', { name: /skip to (main )?content/i });

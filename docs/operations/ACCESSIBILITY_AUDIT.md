@@ -2,8 +2,9 @@
 
 Owner: accessibility & cross-browser readiness (plan Section H)
 Standard: **WCAG 2.1 Level AA**
-Status: static audit complete; **automated suite not yet executed; manual
-keyboard and screen-reader passes not yet run**
+Status: static audit complete; **automated suite first executed 2026-07-29
+against production — 21 passed / 2 failed / 18 skipped (see §2.4 and §8);
+manual keyboard and screen-reader passes not yet run**
 
 ---
 
@@ -52,11 +53,19 @@ see §7.
 §5 that can be made deterministic. It uses no accessibility testing library (see
 §4) and asserts against the accessibility tree and computed styles directly.
 
-**2.4 What has *not* happened yet.** The specs have **not been executed** — this
-branch has no runnable install. No screen reader has been used. No real browser
-has rendered any of these pages for this audit. Nothing in this document should
-be read as "verified working"; §6 is "verified broken by reading the code", and
-the absence of a finding for a surface is **not** a clean bill of health for it.
+**2.4 Execution status.** First executed 2026-07-29 against production
+(`https://www.mangu-publishers.com`, chromium): **21 passed, 2 failed, 18
+skipped.** The failures: A11Y-020 (checkout has no `<h1>`; only the footer's
+headings render) and the product-page cover-image naming check, which tripped
+because the current seed book has no hero cover — the only named image on its
+page is a *Similar Books* card for a different title, so this is a seed-data
+artifact expected to pass once real books with covers are published. The skips:
+the credentialed admin specs (no test credentials set), the remaining
+`test.fixme` defects (A11Y-004, A11Y-006), the audio player specs (no
+audiobooks are published), and viewport-dependent controls. Findings marked
+Fixed in §8 with "spec vs production" were re-verified by the enabled specs in
+that run, not by a human; **no screen reader has been used and no manual
+keyboard pass has been recorded** — those remain required for sign-off (§9).
 
 ---
 
@@ -141,31 +150,31 @@ relevant the moment a book trailer with speech ships through `VimeoPlayer`.
 | 1.3.4 Orientation | AA | No orientation lock is applied — verify on M1/M2 |
 | 1.3.5 Identify Input Purpose | AA | `autocomplete` on auth fields |
 | 1.4.1 Use of Color | A | Strikethrough pricing; error text colour |
-| 1.4.3 Contrast (Minimum) | AA | **Failing — A11Y-001, A11Y-002, A11Y-010** |
+| 1.4.3 Contrast (Minimum) | AA | Was failing — A11Y-001, A11Y-002, A11Y-010; fixed at the token layer, spec-verified |
 | 1.4.4 Resize Text | AA | 200% zoom on all key surfaces |
 | 1.4.10 Reflow | AA | 320px width without two-axis scrolling |
 | 1.4.11 Non-text Contrast | AA | Focus ring, control borders, player progress bar |
 | 1.4.12 Text Spacing | AA | Line-clamped titles are the risk area |
 | 1.4.13 Content on Hover or Focus | AA | Sleep-timer popup, tooltips |
-| 2.1.1 Keyboard | A | **Failing — A11Y-003, A11Y-005** |
+| 2.1.1 Keyboard | A | Was failing — A11Y-003, A11Y-005; fixed, audio specs await audiobook content |
 | 2.1.2 No Keyboard Trap | A | Dialogs, sheet nav, sleep-timer popup |
-| 2.1.4 Character Key Shortcuts | A | **At risk — A11Y-005** (Space/k/arrows, no opt-out) |
-| 2.4.1 Bypass Blocks | A | **Failing — A11Y-007** (no skip link) |
+| 2.1.4 Character Key Shortcuts | A | Was at risk — A11Y-005; exclusion list widened |
+| 2.4.1 Bypass Blocks | A | Was failing — A11Y-007; skip link live, spec-verified vs production |
 | 2.4.2 Page Titled | A | Per-route `metadata.title` is set |
 | 2.4.3 Focus Order | A | Header → main → footer; dialogs |
 | 2.4.4 Link Purpose (In Context) | A | Retailer buttons, card links |
 | 2.4.5 Multiple Ways | AA | Nav + search + catalog filters |
-| 2.4.6 Headings and Labels | AA | **Failing — A11Y-006** (auth pages have no h1) |
+| 2.4.6 Headings and Labels | AA | **Failing — A11Y-006** (auth pages have no h1); see also A11Y-020 |
 | 2.4.7 Focus Visible | AA | Global `:focus-visible` rule exists; verify per control |
 | 3.1.1 Language of Page | A | `<html lang="en">` is set |
 | 3.2.1 On Focus / 3.2.2 On Input | A | Catalog filters navigate on change — verify |
 | 3.2.3 Consistent Navigation | AA | Shared Header/Footer |
 | 3.2.4 Consistent Identification | AA | Play/pause naming across player and mini-player |
-| 3.3.1 Error Identification | A | **Partly failing — A11Y-008** (admin) |
+| 3.3.1 Error Identification | A | Was partly failing — A11Y-008 (admin); fixed, credentialed run pending |
 | 3.3.2 Labels or Instructions | A | Admin required-field marking is `*` only |
 | 3.3.3 Error Suggestion | AA | Auth errors are good; admin blockers are good |
 | 3.3.4 Error Prevention (Legal, Financial, Data) | AA | Checkout and unpublish confirmation |
-| 4.1.2 Name, Role, Value | A | **Failing — A11Y-003, A11Y-008** |
+| 4.1.2 Name, Role, Value | A | Was failing — A11Y-003, A11Y-008; fixed as above |
 | 4.1.3 Status Messages | AA | `aria-live` on auth; **missing on the publish checklist** |
 
 ---
@@ -657,6 +666,26 @@ and should be done incrementally, not in one PR.
 
 ---
 
+### A11Y-020 — the checkout page has no `<h1>` · **Medium** · 1.3.1, 2.4.6
+
+**Where:** `app/checkout/page.tsx` — found by the first spec execution against
+production (2026-07-29), not by the original static review.
+
+**What:** on `/checkout?book_id=…` the only headings in the rendered document
+are the footer's (`h2` "MANGU" and four `h3` column titles). The page's own
+content — order summary, book title, payment call to action — renders with no
+`h1` at all, so the money page has no top-level heading and its outline starts
+in the footer. The Checkout spec (`has one h1 and a named, keyboard reachable
+payment control`) fails on this today.
+
+**Proposed fix:** add a visible `h1` ("Checkout" or "Complete your purchase") at
+the top of the page's main content, and demote the book-title `h2` beneath it if
+needed to keep the outline contiguous.
+
+**Owner:** checkout owner.
+
+---
+
 ### Confirmed good (do not regress)
 
 Recorded so a later refactor does not quietly undo them:
@@ -726,7 +755,7 @@ defect; flipping `test.fixme` → `test` is the regression guard for that fix.
 | P7 | Purchase CTA reachable with visible focus | 2.1.1, 2.4.7 | Spec | ☐ |
 | P8 | Tabs expose `tablist`/`tab`/`tabpanel` + `aria-selected` | 4.1.2 | Spec | ☐ |
 | P9 | Arrow keys move tab selection | 2.1.1 | Spec | ☐ |
-| P10 | Price and rating are readable | 1.4.3 | Spec (fixme, A11Y-001) | ☐ |
+| P10 | Price and rating are readable | 1.4.3 | Spec | ☐ |
 | P11 | Rating announces its scale | 1.1.1 | Manual (A11Y-011) | ☐ |
 | P12 | Discounted price is unambiguous when announced | 1.4.1 | Manual (A11Y-012) | ☐ |
 | P13 | New-tab behaviour is warned about | 3.2.5 | Manual (A11Y-013) | ☐ |
@@ -743,8 +772,8 @@ defect; flipping `test.fixme` → `test` is the regression guard for that fix.
 | A5 | Volume is a named slider that responds to arrows | 2.1.1, 4.1.2 | Spec | ☐ |
 | A6 | Mute toggle named and stateful | 4.1.2 | Spec | ☐ |
 | A7 | Seek bar exposes a full slider ARIA contract | 4.1.2 | Spec | ☐ |
-| A8 | Seek bar is focusable and operable by keyboard | 2.1.1 | Spec (fixme, A11Y-003) | ☐ |
-| A9 | Shortcuts do not swallow Space on other controls | 2.1.1, 2.1.4 | Spec (fixme, A11Y-005) | ☐ |
+| A8 | Seek bar is focusable and operable by keyboard | 2.1.1 | Spec | ☐ |
+| A9 | Shortcuts do not swallow Space on other controls | 2.1.1, 2.1.4 | Spec | ☐ |
 | A10 | Timecodes and chapter times are readable | 1.4.3 | Manual (A11Y-001) | ☐ |
 | A11 | Chapter list navigable and current chapter announced | 4.1.2 | Manual | ☐ |
 | A12 | Sleep-timer popup does not trap focus | 2.1.2 | Manual (A11Y-015) | ☐ |
@@ -772,7 +801,7 @@ defect; flipping `test.fixme` → `test` is the regression guard for that fix.
 
 | # | Check | Criterion | How verified | Status |
 | --- | --- | --- | --- | --- |
-| K1 | Exactly one `<h1>` | 1.3.1 | Spec | ☐ |
+| K1 | Exactly one `<h1>` | 1.3.1 | Spec | ☐ (failing — A11Y-020) |
 | K2 | Payment CTA named, reachable, visible focus | 2.1.1, 2.4.7 | Spec | ☐ |
 | K3 | Order summary readable | 1.4.3 | Manual (A11Y-001) | ☐ |
 | K4 | Price payable unambiguous when announced | 1.4.1 | Manual (A11Y-012) | ☐ |
@@ -784,7 +813,7 @@ defect; flipping `test.fixme` → `test` is the regression guard for that fix.
 | # | Check | Criterion | How verified | Status |
 | --- | --- | --- | --- | --- |
 | N1 | banner / main / contentinfo landmarks present | 1.3.1 | Spec | ☐ |
-| N2 | Skip link moves focus to `<main>` | 2.4.1 | Spec (fixme, A11Y-007) | ☐ |
+| N2 | Skip link moves focus to `<main>` | 2.4.1 | Spec | ☑ 2026-07-29 (vs production, chromium) |
 | N3 | Mobile drawer traps focus while open | 2.1.2 | Spec | ☐ |
 | N4 | Closing the drawer restores focus to its trigger | 2.4.3 | Spec | ☐ |
 | N5 | Focus ring is visible on the brand link | 2.4.7 | Spec | ☐ |
@@ -803,7 +832,7 @@ and `TEST_ADMIN_PASSWORD` when those are unset, so CI stays green without them.
 | M2 | Every field has a programmatic label | 1.3.1, 3.3.2 | Spec | ☐ |
 | M3 | Heading outline well formed (one h1, no skips) | 1.3.1 | Spec | ☐ |
 | M4 | Publish blockers are announced on submit | 3.3.1, 4.1.3 | Spec | ☐ |
-| M5 | Field errors associated via `aria-describedby`/`aria-invalid` | 1.3.1, 4.1.2 | Spec (fixme, A11Y-008) | ☐ |
+| M5 | Field errors associated via `aria-describedby`/`aria-invalid` | 1.3.1, 4.1.2 | Spec | ☐ |
 | M6 | Every admin control shows visible focus | 2.4.7 | Spec | ☐ |
 | M7 | Publish-readiness changes are announced live | 4.1.3 | Manual | ☐ |
 | M8 | Unpublish confirmation is announced and cancellable | 3.3.4 | Manual | ☐ |
@@ -818,14 +847,14 @@ One row per finding. Copy the template; do not overwrite history.
 
 | ID | Summary | Severity | Owner | Files | Status | Fix PR | Verified by | Date | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A11Y-001 | `text-secondary` unreadable (1.37:1 / 1.00:1) | Critical | theme | `app/globals.css`, `tailwind.config.ts`, 62 files | Open |  |  |  | Blocks reading price/author/timecodes |
-| A11Y-002 | Default button 3.78:1 | High | theme | `components/ui/button.tsx`, `app/globals.css` | Open |  |  |  |  |
-| A11Y-003 | Seek bar not keyboard operable | High | audio | `components/players/AudioPlayer.tsx` | Open |  |  |  |  |
+| A11Y-001 | `text-secondary` unreadable (1.37:1 / 1.00:1) | Critical | theme | `app/globals.css`, `tailwind.config.ts`, 62 files | Fixed | #356 | Contrast spec vs production, 2026-07-29 | 2026-07-29 | `--text-secondary` token; manual SR pass pending |
+| A11Y-002 | Default button 3.78:1 | High | theme | `components/ui/button.tsx`, `app/globals.css` | Fixed | #356 | Contrast spec vs production, 2026-07-29 | 2026-07-29 | `--primary-strong` button fill; manual pass pending |
+| A11Y-003 | Seek bar not keyboard operable | High | audio | `components/players/AudioPlayer.tsx` | Fixed | #356 | Spec enabled; execution awaits published audiobooks | 2026-07-29 | Audio specs skip (no audiobooks yet) |
 | A11Y-004 | Heading levels skipped | Medium | catalog + audio | `BookCard.tsx`, `AudioPlayer.tsx`, `books/[slug]/page.tsx` | Open |  |  |  |  |
-| A11Y-005 | Document-level Space handler | High | audio | `components/players/AudioPlayer.tsx` | Open |  |  |  |  |
+| A11Y-005 | Document-level Space handler | High | audio | `components/players/AudioPlayer.tsx` | Fixed | #356 | Spec enabled; execution awaits published audiobooks | 2026-07-29 | Exclusion list widened to all key-owning controls |
 | A11Y-006 | Auth pages have no `<h1>` | Medium | design-system + auth | `components/ui/card.tsx`, 3 auth pages | Open |  |  |  |  |
-| A11Y-007 | No skip link | High | shell | `components/shared/Header.tsx`, `app/layout.tsx` | Open |  |  |  | Level A; cheapest fix here |
-| A11Y-008 | Admin errors not associated | High | admin | `app/admin/books/_lib/BookForm.tsx` | Open |  |  |  |  |
+| A11Y-007 | No skip link | High | shell | `components/shared/Header.tsx`, `app/layout.tsx` | Fixed | #356 + #363 | Skip-link spec vs production, 2026-07-29 | 2026-07-29 | Level A; verified end-to-end on the live site |
+| A11Y-008 | Admin errors not associated | High | admin | `app/admin/books/_lib/BookForm.tsx` | Fixed | #356 | Spec enabled; credentialed run pending | 2026-07-29 | Needs TEST_ADMIN_* env to execute; manual pass pending |
 | A11Y-009 | Mini-player overlays content | Medium | shell + audio | `MiniPlayer.tsx`, `app/layout.tsx` | Open |  |  |  |  |
 | A11Y-010 | `text-primary` on `bg-muted` 3.86:1 | Medium | theme | `books/[slug]/page.tsx` | Open |  |  |  | May resolve via A11Y-002 |
 | A11Y-011 | Star rating announced as a glyph | Medium | product page | `books/[slug]/page.tsx` | Open |  |  |  |  |
@@ -837,6 +866,7 @@ One row per finding. Copy the template; do not overwrite history.
 | A11Y-017 | Checkout alt duplicates heading | Low | checkout | `app/checkout/page.tsx` | Open |  |  |  |  |
 | A11Y-018 | No mobile volume control | Info | — | `AudioPlayer.tsx` | Accepted | — | — |  | Intended behaviour |
 | A11Y-019 | Blanket `eslint-disable` (26 files) | Medium | tooling | 26 files | Open |  |  |  | Incremental |
+| A11Y-020 | Checkout page has no `<h1>` (only footer headings render) | Medium | checkout | `app/checkout/page.tsx` | Open |  | Found by e2e run vs production | 2026-07-29 | First finding produced by spec execution rather than static review |
 
 **Template for a new row:**
 
@@ -873,10 +903,10 @@ Cross-browser sign-off is a separate gate — see
 
 ## 10. Caveats on this document
 
-- **Nothing here has been observed in a browser.** Every finding is derived from
-  reading source and, for contrast, from arithmetic on declared design tokens.
-  Line numbers are accurate as of `task/phase1-catalog-data-path` at the time of
-  writing and will drift.
+- **Findings marked Open are from static review; A11Y-020 and the Fixed
+  verifications come from the 2026-07-29 production run.** Line numbers are
+  accurate as of `task/phase1-catalog-data-path` at the time of writing and
+  will drift.
 - **A surface with no finding is not a passing surface.** Static review cannot
   detect a wrong focus order, an inaccurate alt text, an unannounced state
   change, a reflow break at 320px, or a control that is technically labelled but
@@ -884,6 +914,7 @@ Cross-browser sign-off is a separate gate — see
 - **Contrast ratios assume the declared tokens are what renders.** A runtime
   override, a `style` attribute, or an image behind the text would change them.
   The `Contrast` spec recomputes the same ratios from live computed styles —
-  trust that over this document once it has run.
+  trust that over this document once it has run; its 2026-07-29 production run
+  passed.
 - **Third-party surfaces are out of scope for fixes.** Stripe Checkout and Vimeo
   embeds are audited as pass/fail only; we cannot remediate them.
