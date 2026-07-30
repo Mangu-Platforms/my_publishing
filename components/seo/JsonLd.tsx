@@ -2,9 +2,27 @@
  * JSON-LD Structured Data Components
  * @see https://schema.org/docs/schemas.html
  * @see https://developers.google.com/search/docs/appearance/structured-data
+ *
+ * 2026-07-30: defaults corrected for launch truthfulness (Task 4.6 parity).
+ * - Every default URL now derives from getSiteUrl() instead of the hardcoded
+ *   manguprojectz.vercel.app preview host, so structured data always cites the
+ *   canonical host (https://www.mangu-publishers.com in production).
+ * - The "Stream unlimited books, audiobooks, and exclusive videos" copy that
+ *   Task 4.6 removed from every page had survived here in three defaults and was
+ *   still being served to crawlers. Replaced with the truthful site description.
+ * - The invented contact email (contact@manguprojectz.vercel.app — not a real
+ *   mailbox) is no longer emitted. Organization email/contactPoint are only
+ *   included when a caller passes a real, monitored address (TODO(renee): supply
+ *   one when a support mailbox exists).
  */
 
 import React from 'react';
+import { getSiteUrl } from '@/lib/seo/siteUrl';
+
+const SITE_URL = getSiteUrl();
+// Task 4.6: no streaming, no unlimited reading, no video. Say what is true.
+const TRUTHFUL_DESCRIPTION =
+  'Browse the books MANGU Publishers has released and find out where to buy each one.';
 
 interface JsonLdProps {
   data: Record<string, unknown>;
@@ -44,39 +62,49 @@ interface OrganizationJsonLdProps {
   logo?: string;
   description?: string;
   sameAs?: string[];
+  /**
+   * Only emitted when provided. Deliberately has NO default: the previous
+   * default (contact@manguprojectz.vercel.app) was not a real mailbox, and
+   * structured data must not advertise a support address nobody monitors.
+   */
   email?: string;
 }
 
 export function OrganizationJsonLd({
   name = 'MANGU Publishers',
-  url = 'https://manguprojectz.vercel.app',
-  logo = 'https://manguprojectz.vercel.app/logo.png',
-  description = 'Discover a universe of stories. Stream unlimited books, audiobooks, and exclusive videos anywhere, anytime.',
+  url = SITE_URL,
+  logo = `${SITE_URL}/logo.png`,
+  description = TRUTHFUL_DESCRIPTION,
   sameAs = [
+    // TODO(renee): HA-B14 — confirm these are accounts we control, or remove.
     'https://twitter.com/mangupublishers',
     'https://facebook.com/mangupublishers',
     'https://instagram.com/mangupublishers',
   ],
-  email = 'contact@manguprojectz.vercel.app',
+  email,
 }: OrganizationJsonLdProps) {
-  const data = {
+  const data: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name,
     url,
     description,
     sameAs,
-    email,
     logo: { '@type': 'ImageObject', url: logo, width: 512, height: 512 },
     foundingDate: '2024',
     address: { '@type': 'PostalAddress', addressCountry: 'US' },
-    contactPoint: {
+  };
+
+  if (email) {
+    data.email = email;
+    data.contactPoint = {
       '@type': 'ContactPoint',
       contactType: 'customer support',
       email,
       availableLanguage: ['English'],
-    },
-  };
+    };
+  }
+
   return <JsonLdScript data={data} id="organization-jsonld" />;
 }
 
@@ -91,9 +119,9 @@ interface WebSiteJsonLdProps {
 
 export function WebSiteJsonLd({
   name = 'MANGU Publishers',
-  url = 'https://manguprojectz.vercel.app',
-  description = 'Discover, read, and publish books on the MANGU platform',
-  searchUrl = 'https://manguprojectz.vercel.app/books?search={search_term_string}',
+  url = SITE_URL,
+  description = 'Books published by MANGU Publishers, and where to buy them',
+  searchUrl = `${SITE_URL}/books?search={search_term_string}`,
 }: WebSiteJsonLdProps) {
   const data = {
     '@context': 'https://schema.org',
@@ -126,13 +154,13 @@ interface WebPageJsonLdProps {
 
 export function WebPageJsonLd({
   title = 'MANGU Publishers - Digital Publishing Platform',
-  description = 'Discover a universe of stories. Stream unlimited books, audiobooks, and exclusive videos anywhere, anytime.',
-  url = 'https://manguprojectz.vercel.app',
+  description = TRUTHFUL_DESCRIPTION,
+  url = SITE_URL,
   siteName = 'MANGU Publishers',
   type = 'WebPage',
   datePublished = '2024-01-01T00:00:00+00:00',
   dateModified = new Date().toISOString(),
-  image = 'https://manguprojectz.vercel.app/og-image.png',
+  image = `${SITE_URL}/og-image.png`,
   breadcrumb,
 }: WebPageJsonLdProps) {
   const data: Record<string, unknown> = {
@@ -150,13 +178,13 @@ export function WebPageJsonLd({
       name: siteName,
       logo: {
         '@type': 'ImageObject',
-        url: 'https://manguprojectz.vercel.app/logo.png',
+        url: `${SITE_URL}/logo.png`,
         width: 512,
         height: 512,
       },
     },
     inLanguage: 'en-US',
-    isPartOf: { '@type': 'WebSite', name: siteName, url: 'https://manguprojectz.vercel.app' },
+    isPartOf: { '@type': 'WebSite', name: siteName, url: SITE_URL },
   };
 
   if (breadcrumb && breadcrumb.length > 0) {
@@ -318,7 +346,7 @@ export function ArticleJsonLd({
   dateModified,
   author,
   publisher = 'MANGU Publishers',
-  publisherLogo = 'https://manguprojectz.vercel.app/logo.png',
+  publisherLogo = `${SITE_URL}/logo.png`,
 }: ArticleJsonLdProps) {
   const data: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -382,8 +410,8 @@ interface SoftwareAppJsonLdProps {
 
 export function SoftwareAppJsonLd({
   name = 'MANGU Publishers',
-  description = 'Discover a universe of stories. Stream unlimited books, audiobooks, and exclusive videos anywhere, anytime.',
-  url = 'https://manguprojectz.vercel.app',
+  description = TRUTHFUL_DESCRIPTION,
+  url = SITE_URL,
   applicationCategory = 'Books & ReferenceApplication',
   operatingSystem = 'Any',
   rating,

@@ -30,6 +30,8 @@
     "health:check": "tsx scripts/site-health-check.ts",
     "seo:check": "tsx scripts/seo-check.ts",
     "catalog:seed-audit": "tsx scripts/catalog-seed-audit.ts",
+    "gates:compile": "tsx scripts/compile-gate-evidence.ts",
+    "qa:crawl": "tsx scripts/crawl-regression.ts",
     "phoenix:export": "bash scripts/export-supabase.sh",
     "phoenix:transform": "tsx scripts/transform-data.ts",
     "phoenix:migrate-storage": "tsx scripts/migrate-storage.ts",
