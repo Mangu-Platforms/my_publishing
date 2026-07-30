@@ -18,8 +18,8 @@ launch comms are sent. Epilogue items (§5) close within 14 days after.
 | A2 | **LEDGER** | Claude | Keep hosted↔repo migration history at **zero drift**. Today: mirrored the 3 `mcp_vault`/`mcp_stack` entries verbatim from `supabase_migrations.schema_migrations` (this PR). Future: any hosted apply is mirrored same-day. | Any schema change | History-sync files only |
 | A3 | **SCRIBE** | Claude | Governance upkeep: evidence packet, HUMAN_ACTIONS deltas, machine-evidence rows in `LAUNCH_GATE_EVIDENCE.md` (approver cells stay human), branch-audit execution support. | Continuous | Class-1 docs |
 | A4 | **KEYS** | Claude + Claude-in-Chrome / Drive | Content entry: the moment book assets exist (Drive folder or chat upload) and an admin session is available in Chrome, enter each title via `/admin/books/new`, owner taps approve per publish, verify PDP, then seed flip via admin UI in HA-C8 order (real in → seed out). | **Blocked on H0-4** (assets) | Admin UI only; no DB writes |
-| A5 | **SWEEP** | GitHub Copilot background agent | One PR: replace lingering `manguprojectz.vercel.app` / apex-as-endpoint references in operational scripts + live docs with the canonical `https://www.mangu-publishers.com` (esp. `scripts/create-stripe-webhook.sh`, HA-C7 residue). Historical evidence/status docs quoting old values stay untouched. | Dispatched 2026-07-30 | Truthfulness/config alignment |
-| A6 | **HARDEN** | GitHub Copilot background agent | **DRAFT, post-launch, DO-NOT-MERGE during freeze:** migration converting `author_manuscript_status_history` + `author_manuscript_feedback` views to `security_invoker = true` (clears the 2 advisor ERRORs), preserving definitions from the 20260724 set. | Dispatched 2026-07-30; merge after GO | Draft only |
+| A5 | **SWEEP** | Claude (direct) — Copilot dispatch attempted 2026-07-30, rejected 401 (account lacks coding-agent access) | Canonical-host alignment: the known apex reference in `scripts/create-stripe-webhook.sh` is **fixed in this PR** (apex-registered Stripe endpoints fail every delivery — Stripe does not follow the 308). Full repo-wide sweep for further `manguprojectz.vercel.app`/apex-as-endpoint references queued for when code-search access is approved or post-launch. | Known ref: DONE. Full sweep: queued | Truthfulness/config alignment |
+| A6 | **HARDEN** | Claude (direct) — same Copilot 401 | **DRAFT, post-launch, DO-NOT-MERGE during freeze:** migration converting `author_manuscript_status_history` + `author_manuscript_feedback` views to `security_invoker`, clearing the 2 advisor ERRORs. Test against a branch DB before applying to hosted. | Draft PR opened 2026-07-30 | Draft only |
 
 **Anti-PR-storm rule:** max **2** open agent PRs at any time. Merge-on-green only, owner-authorized trail in every merge body. No feature work until the freeze lifts.
 
@@ -29,7 +29,7 @@ Each item is here because no agent can lawfully or physically do it.
 
 | # | Action | Why human | Est. |
 | --- | --- | --- | --- |
-| H0-1 | **Stripe dashboard:** exactly one endpoint `https://www.mangu-publishers.com/api/webhook`, secret matches Vercel `STRIPE_WEBHOOK_SECRET`, 4 events (`checkout.session.completed`, `checkout.session.expired`, `charge.refunded`, `payment_intent.payment_failed`). **Urgent: the legacy path already 410s in production.** | Dashboard login | 5 min |
+| H0-1 | **Stripe dashboard:** exactly one endpoint `https://www.mangu-publishers.com/api/webhook`, secret matches Vercel `STRIPE_WEBHOOK_SECRET`, 4 events (`checkout.session.completed`, `checkout.session.expired`, `charge.refunded`, `payment_intent.payment_failed`). **Urgent: the legacy path already 410s in production.** If using `scripts/create-stripe-webhook.sh`, pull this PR first — the pre-fix version registered the apex and every delivery would fail. | Dashboard login | 5 min |
 | H0-2 | One **real purchase + refund** with a real card (G4/G8). | Moves money | 15 min |
 | H0-3 | Real **signup, failed logins, password reset**; reset-email links must point at www (G3). | Real inbox | 15 min |
 | H0-4 | **Name the 3–6 launch titles**, confirm rights, hand assets (title, author, description, price, genre, cover, retailer links) to A4 via Drive or chat. | Only the owner knows the books | the wildcard |
@@ -57,8 +57,8 @@ H0-4 lands. The programme's total duration is therefore ≈ the book-assets dura
 | Bucket privacy (HA-C2) | DONE, db-enforced | migration 20260730173947, PR #379 |
 | Truthful JSON-LD deployed | DONE @ `0e38287` (dpl_21D4znjD… READY); live re-probe pending (fetch tool rate-limit) | PR #379; A1 next pass |
 | Migration drift | **ZERO** once this PR merges | 3 mirrors in this PR |
-| A5 SWEEP | dispatched, PR pending | Copilot task 2026-07-30 |
-| A6 HARDEN | dispatched, draft pending, post-launch | Copilot task 2026-07-30 |
+| A5 SWEEP | Known apex ref in create-stripe-webhook.sh **fixed in this PR**; Copilot dispatch 401; full sweep queued | this PR |
+| A6 HARDEN | Draft PR opened, DO NOT MERGE during freeze | draft PR |
 | H0-1 Stripe endpoint | OPEN — most urgent | — |
 | H0-2/3 money + auth proofs | OPEN | — |
 | H0-4 book assets | OPEN — programme-length driver | — |
@@ -68,9 +68,10 @@ H0-4 lands. The programme's total duration is therefore ≈ the book-assets dura
 
 ## 5. Post-launch epilogue (within 14 days of GO)
 
-1. Merge A6 HARDEN (advisor ERRORs → zero). 2. Decide `mcp_vault`/`mcp_stack` keep-or-drop
-(now a normal repo-tracked decision; both schemas empty of secrets today). 3. Reopen and
-batch the 3 dependabot majors behind green CI. 4. Execute branch deletions per the audit.
-5. Submit sitemap to Search Console (site currently has zero index presence — expected
-pre-launch). 6. Supply a real support mailbox and pass it to `OrganizationJsonLd`.
-7. Lift Freeze #209 by owner comment.
+1. Merge A6 HARDEN (advisor ERRORs → zero) after branch-DB testing. 2. Decide
+`mcp_vault`/`mcp_stack` keep-or-drop (now a normal repo-tracked decision; both schemas
+empty of secrets today). 3. Reopen and batch the 3 dependabot majors behind green CI.
+4. Execute branch deletions per the audit. 5. Submit sitemap to Search Console (site
+currently has zero index presence — expected pre-launch). 6. Supply a real support
+mailbox and pass it to `OrganizationJsonLd`. 7. Complete A5's full repo-wide sweep.
+8. Lift Freeze #209 by owner comment.
