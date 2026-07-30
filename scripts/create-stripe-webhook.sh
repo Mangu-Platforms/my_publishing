@@ -3,7 +3,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ROOT}/.env.local"
-URL="https://mangu-publishers.com/api/webhook"
+# A5 SWEEP 2026-07-30: MUST be the canonical www host. The apex
+# (https://mangu-publishers.com) 308-redirects to www, and Stripe does NOT
+# follow redirects for webhook deliveries — an apex-registered endpoint fails
+# on every event. Do not change this back to the apex.
+URL="https://www.mangu-publishers.com/api/webhook"
 
 echo "Creating live Stripe webhook for $URL..."
 
