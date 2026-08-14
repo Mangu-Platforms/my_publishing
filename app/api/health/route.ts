@@ -8,6 +8,18 @@
  * - Supabase auth service availability
  * - MongoDB Atlas ping when MONGODB_URI is set (ADR-002; additive until cutover)
  *
+ * Disclosure policy (F-09):
+ * - In production, unauthenticated callers receive a minimal
+ *   { status: 'ok' | 'degraded' } body; readiness is conveyed by the HTTP status
+ *   code alone. Full per-subsystem diagnostics require an admin session
+ *   (isAdmin from lib/middleware/auth) or an x-health-token request header
+ *   matching HEALTH_CHECK_TOKEN.
+ * - HEALTH_CHECK_TOKEN (OPTIONAL env var; intentionally not part of required
+ *   env validation): shared secret for external monitors that need full
+ *   diagnostics without a session. When unset, header access is disabled and
+ *   only admin sessions see detail.
+ * - Non-production environments always return full detail.
+ *
  * Migration Order (apply in this sequence):
  * 1. 20260116000000_initial_schema.sql - Creates profiles table and core schema
  * 2. 20260117000000_analytics_events.sql - Analytics tracking
@@ -29,6 +41,7 @@ import { isMongoConfigured } from '@/lib/mongodb-config';
 import { pingMongo } from '@/lib/mongodb';
 import { isMongoPrimary } from '@/lib/db/provider';
 import { validateEnvironment } from '@/lib/utils/env-validation';
+import { isAdmin } from '@/lib/middleware/auth';
 
 // PHASE-7 — Health/readiness probes must never be statically cached.
 export const dynamic = 'force-dynamic';
@@ -61,6 +74,39 @@ const startTime = Date.now();
 // PHASE-7 — Health responses must never be cached by browsers, CDNs, or
 // load-balancer probe infrastructure.
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, max-age=0' };
+
+// F-09 — In production, per-subsystem messages (missing tables, provider
+// misconfiguration, latency figures) are a reconnaissance surface. Full
+// diagnostics are gated behind an admin session or a shared monitoring token
+// (x-health-token === HEALTH_CHECK_TOKEN, when set). Non-production always
+// returns full detail for local debugging.
+async function canViewDiagnostics(request: Request): Promise<boolean> {
+  if (process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+
+  const healthToken = process.env.HEALTH_CHECK_TOKEN;
+  if (healthToken && request.headers.get('x-health-token') === healthToken) {
+    return true;
+  }
+
+  return isAdmin();
+}
+
+function healthResponse(
+  health: HealthStatus,
+  httpStatus: number,
+  showDetail: boolean
+): NextResponse {
+  if (showDetail) {
+    return NextResponse.json(health, { status: httpStatus, headers: NO_STORE_HEADERS });
+  }
+  // Minimal disclosure (F-09): status word + HTTP status code only.
+  return NextResponse.json(
+    { status: health.status === 'healthy' ? 'ok' : 'degraded' },
+    { status: httpStatus, headers: NO_STORE_HEADERS }
+  );
+}
 
 function checkEnvironment(): CheckResult {
   const validation = validateEnvironment();
@@ -297,9 +343,13 @@ async function checkMigrations(
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const readyProbe = searchParams.get('ready') === '1';
+  const showDetail = await canViewDiagnostics(request);
 
   // Lightweight probe for load balancers / smoke tests (always 200 if process is up).
   if (!readyProbe) {
+    if (!showDetail) {
+      return NextResponse.json({ status: 'ok' }, { status: 200, headers: NO_STORE_HEADERS });
+    }
     return NextResponse.json(
       {
         status: 'ok',
@@ -331,7 +381,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         migrations: { status: 'fail', message: 'Skipped - environment not configured' },
       },
     };
-    return NextResponse.json(health, { status: 503, headers: NO_STORE_HEADERS });
+    return healthResponse(health, 503, showDetail);
   }
 
   const mongoPrimary = isMongoPrimary();
@@ -368,7 +418,7 @@ export async function GET(request: Request): Promise<NextResponse> {
           stripe: { status: 'warn', message: 'Skipped - Supabase connection failed' },
         },
       };
-      return NextResponse.json(health, { status: 503, headers: NO_STORE_HEADERS });
+      return healthResponse(health, 503, showDetail);
     }
   }
 
@@ -418,5 +468,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     },
   };
 
-  return NextResponse.json(health, { status: anyFailing ? 503 : 200, headers: NO_STORE_HEADERS });
+  return healthResponse(health, anyFailing ? 503 : 200, showDetail);
 }
