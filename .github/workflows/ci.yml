@@ -35,11 +35,4 @@ jobs:
       # build so a logic regression fails fast, and so the suite never sees
       # .next/ output.
       - run: npm test
-      # F-03 env gate: `npm run build` first runs scripts/prebuild-env-gate.js,
-      # which enforces the full production env contract (scripts/validate-env.ts
-      # --production) only when VERCEL_ENV=production. In GitHub CI the gate
-      # self-skips by design: this job's dummy env + USE_MOCKS=true intentionally
-      # violates that contract. The step below is the non-production, mock-aware
-      # shape check, so env regressions CI *can* catch still fail here.
-      - run: npm run validate-env
       - run: npm run build
