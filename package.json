@@ -10,7 +10,7 @@
     "validate-env": "tsx scripts/validate-env.ts",
     "validate-env:production": "tsx scripts/validate-env.ts --production",
     "dev": "npm run validate-env && next dev",
-    "build": "next build",
+    "build": "node scripts/prebuild-env-gate.js && next build",
     "start": "NODE_ENV=production next start",
     "lint": "eslint app components lib",
     "type-check": "tsc --noEmit",
