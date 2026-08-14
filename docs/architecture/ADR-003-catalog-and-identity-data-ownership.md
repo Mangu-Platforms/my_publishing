@@ -1,8 +1,8 @@
-# ADR-001 — Catalog and Identity Data Ownership
+# ADR-003 — Catalog and Identity Data Ownership
 
 | Field | Value |
 | --- | --- |
-| **ID** | `docs/architecture/ADR-001-catalog-and-identity-data-ownership.md` |
+| **ID** | `docs/architecture/ADR-003-catalog-and-identity-data-ownership.md` (renumbered from ADR-001, 2026-08-14) |
 | **Status** | PROPOSED — decision recorded, implementation in progress (Task 1.0 / Task 1.1) |
 | **Date** | 2026-07-28 |
 | **Deciders** | Release Manager / Solo Operator (Renee); Engineering |
@@ -10,18 +10,17 @@
 | **Supersedes** | Nothing. **Complements** `docs/adr/ADR-001-canonical-platform.md` and `docs/adr/ADR-002-mongodb-data-platform.md`. |
 | **Subordinate to** | `docs/NEXT_GO.md` (execution authority, CCR-001). Where this ADR conflicts with `docs/NEXT_GO.md`, `docs/NEXT_GO.md` wins. |
 
-> ### ⚠️ Numbering collision — read this first
+> ### Numbering — renumbered ADR-001 → ADR-003 (2026-08-14)
 >
-> The repository **already contains an ADR numbered 001**: `docs/adr/ADR-001-canonical-platform.md`
-> (Status: **ACCEPTED (Option B — Vercel)**, signed 2026-07-18, tied to hard gate G9).
-> That ADR decides the *hosting platform*. **This** document decides *data ownership* and lives in a
-> different directory (`docs/architecture/`).
->
-> Two live documents called "ADR-001" is a governance defect. It is filed here under the name the
-> Task 1.1 brief specified so the work is not blocked, but **renumbering is a decision Renee must
-> make** — see [§12 Open items requiring a human decision](#12-open-items-requiring-a-human-decision).
-> Until then: cite platform decisions as **ADR-001 (canonical platform)** and data-ownership
-> decisions as **ADR-001 (data ownership)**, never bare "ADR-001".
+> This document was filed 2026-07-28 (PR #351) as "ADR-001" per the Task 1.1 brief, colliding with
+> the already-ACCEPTED `docs/adr/ADR-001-canonical-platform.md` (hosting platform, signed
+> 2026-07-18, hard gate G9). Per `docs/launch/DEFINITION_OF_LAUNCH_COMPLETE.md` B11 / HA-C6 it has
+> been **renumbered to ADR-003**, the next free number in the repository ADR series
+> (`docs/adr/ADR-001` platform · `docs/adr/ADR-002` MongoDB · **ADR-003** data ownership — file
+> kept in `docs/architecture/` beside its companion matrices). Decision content is unchanged.
+> Cite hosting as **ADR-001 (canonical platform)** and this document as **ADR-003 (data
+> ownership)**. In documents dated before 2026-08-14, citations of "ADR-001 (data ownership)" —
+> or of ADR-001 §-sections about data ownership — refer to this file.
 
 ---
 
@@ -446,10 +445,11 @@ Cloud Run.
 
 These are **not** decided by this ADR. They need Renee.
 
-1. **ADR numbering collision.** Two documents named ADR-001. Options: renumber this one (e.g.
-   ADR-003, continuing the `docs/adr/` sequence), or formally split the namespaces
-   (`docs/adr/` = platform, `docs/architecture/` = data) and always cite with a qualifier. Until
-   decided, the collision stands.
+1. **ADR numbering collision — RESOLVED 2026-08-14.** This document was renumbered to
+   **ADR-003**, continuing the `docs/adr/` sequence (the first option listed here), per
+   `docs/launch/DEFINITION_OF_LAUNCH_COMPLETE.md` B11 / HA-C6. Stale cross-references in other
+   documents are being updated separately; the B11 evidence entry in `docs/OPERATOR_QA_LOG.md`
+   remains for the Publisher to append.
 2. **`published-epubs` bucket is public** (§3.3) while the launch decision is "no public EPUB
    access". Decide: make the bucket private and serve via signed URLs, or accept the exposure with a
    recorded residual risk.
@@ -466,7 +466,7 @@ These are **not** decided by this ADR. They need Renee.
 | Document | Role |
 | --- | --- |
 | `docs/NEXT_GO.md` | Execution authority. Supersedes this document on conflict (CCR-001). |
-| `docs/adr/ADR-001-canonical-platform.md` | Hosting decision (Vercel). Distinct ADR-001 — see collision note. |
+| `docs/adr/ADR-001-canonical-platform.md` | Hosting decision (Vercel). The sole ADR-001 — see numbering note above. |
 | `docs/adr/ADR-002-mongodb-data-platform.md` | Mongo adoption. |
 | `docs/architecture/DATA_OWNERSHIP_MATRIX.md` | Per-entity source of truth, read/write paths. |
 | `docs/architecture/SCHEMA_DRIFT_DISPOSITIONS.md` | Nonexistent objects referenced by code, and their dispositions. |

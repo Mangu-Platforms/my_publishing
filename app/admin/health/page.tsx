@@ -23,6 +23,7 @@ async function getHealthStatus(): Promise<HealthCheck> {
   try {
     const response = await fetch(`${baseUrl}/api/health?ready=1`, {
       cache: 'no-store',
+      ...(process.env.HEALTH_CHECK_TOKEN ? { headers: { 'x-health-token': process.env.HEALTH_CHECK_TOKEN } } : {}),
     });
 
     const data = await response.json();
