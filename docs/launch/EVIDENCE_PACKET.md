@@ -268,7 +268,7 @@ the retailer field list and four conflicting `BookStatus` type definitions had a
 The Task 1.0 blocker had never been written down as a decision.
 
 ### Changes made
-`ADR-001-catalog-and-identity-data-ownership.md` records **Option A** as the decision, with a
+`ADR-003-catalog-and-identity-data-ownership.md` records **Option A** as the decision, with a
 per-path branch table, the derived-visibility rule, Mongo/Supabase/storage responsibilities,
 the Task 2.0b field gaps, rejected Options B and C, a six-step migration/backfill strategy,
 ten rules for future contributors, the full Phoenix switch stack and the Vercel-vs-Cloud-Run
@@ -278,7 +278,7 @@ each with file, line, grep evidence that the object exists in no migration, a di
 an owner.
 
 ### Files changed
-`docs/architecture/ADR-001-catalog-and-identity-data-ownership.md` ·
+`docs/architecture/ADR-003-catalog-and-identity-data-ownership.md` ·
 `docs/architecture/DATA_OWNERSHIP_MATRIX.md` ·
 `docs/architecture/SCHEMA_DRIFT_DISPOSITIONS.md`
 
