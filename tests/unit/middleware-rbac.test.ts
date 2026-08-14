@@ -62,14 +62,16 @@ jest.mock('@/lib/supabase/edge-auth', () => ({
 }));
 
 import type { NextRequest } from 'next/server';
-import { middleware } from '@/middleware';
+import { middleware, config } from '@/middleware';
 import { MANGU_ROLE_COOKIE } from '@/lib/auth/roles';
 import { getSessionCookie } from 'better-auth/cookies';
 import { getEdgeAuthUser, getEdgeUserRole } from '@/lib/supabase/edge-auth';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 const mockedSessionCookie = getSessionCookie as jest.MockedFunction<typeof getSessionCookie>;
 const mockedEdgeUser = getEdgeAuthUser as jest.MockedFunction<typeof getEdgeAuthUser>;
 const mockedEdgeRole = getEdgeUserRole as jest.MockedFunction<typeof getEdgeUserRole>;
+const mockedRateLimit = enforceRateLimit as jest.MockedFunction<typeof enforceRateLimit>;
 
 const ORIGINAL_ENV = process.env;
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -297,5 +299,68 @@ describe('the real gate is enforced server-side in the portal layouts', () => {
     expect(src).toContain('getRequestUser');
     expect(src).not.toMatch(/from 'next\/headers'/);
     expect(src).not.toMatch(/cookies\(\)/);
+  });
+});
+
+describe('F-02 — scoped middleware: gated Edge auth + fail-closed error fallback', () => {
+  it('POST /api/newsletter is rate limited without ever resolving auth', async () => {
+    const res = await middleware(makeRequest('/api/newsletter', { method: 'POST' }));
+
+    expect(res.status).toBe(200);
+    expect(location(res)).toBeNull();
+    expect(mockedRateLimit).toHaveBeenCalledWith('api', '203.0.113.10');
+    expect(mockedEdgeUser).not.toHaveBeenCalled();
+    expect(mockedEdgeRole).not.toHaveBeenCalled();
+  });
+
+  it('/admin still resolves the user at the Edge', async () => {
+    anonymous();
+    await middleware(makeRequest(PORTAL_PATHS.admin));
+    expect(mockedEdgeUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('a signed-in user is still redirected home from /login', async () => {
+    signedInAs('reader');
+    const res = await middleware(makeRequest('/login'));
+    expect(location(res)).toBe('https://www.mangu-publishers.com/');
+  });
+
+  it('fails CLOSED for /api/files when the try block throws', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      mockedEdgeUser.mockRejectedValue(new Error('edge auth exploded'));
+      const res = await middleware(makeRequest('/api/files/abc'));
+
+      expect(res.status).toBe(503);
+      expect(location(res)).toBeNull();
+      expect(JSON.parse(res.body as unknown as string)).toMatchObject({
+        error: 'auth_unavailable',
+      });
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('the matcher is scoped — the catch-all is gone, every gated prefix is present', () => {
+    expect(config.matcher.join(' ')).not.toContain('_next');
+    for (const entry of [
+      '/reading/:path*',
+      '/library/:path*',
+      '/author/:path*',
+      '/partner/:path*',
+      '/admin/:path*',
+      '/dashboard/:path*',
+      '/api/files/:path*',
+      '/api/auth/:path*',
+      '/api/upload/:path*',
+      '/api/newsletter/:path*',
+      '/api/checkout/:path*',
+      '/login',
+      '/register',
+      '/reset-password/:path*',
+      '/verify-email',
+    ]) {
+      expect(config.matcher).toContain(entry);
+    }
   });
 });
