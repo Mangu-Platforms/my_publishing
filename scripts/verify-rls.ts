@@ -325,6 +325,101 @@ async function testRLS(): Promise<TestResult[]> {
     });
   }
 
+  // Tests 8-10 (F-04, 20260814091000_rls_policy_backfill.sql): tables that are
+  // deny-all by design (book_content, rate_limits) or owner-scoped
+  // (user_activities) must never return rows to anonymous clients.
+
+  // Test 8: book_content is not readable anonymously. Reader downloads are
+  // proxied through the service-role client (app/api/files/[id]/route.ts);
+  // RLS is enabled with zero policies on this table.
+  try {
+    const { data, error } = await withRetry(() =>
+      supabaseAnon.from('book_content').select('id').limit(1)
+    );
+    // RLS filters rows rather than raising errors for SELECTs, so an empty
+    // result set means the policy is working; only returned rows are a leak.
+    if (data && data.length > 0) {
+      results.push({
+        name: 'Book content is not publicly accessible',
+        passed: false,
+        error: 'Anonymous user was able to access book_content',
+      });
+    } else if (error && !error.message.includes('permission denied')) {
+      results.push({
+        name: 'Book content is not publicly accessible',
+        passed: false,
+        error: error.message,
+      });
+    } else {
+      results.push({ name: 'Book content is not publicly accessible', passed: true });
+    }
+  } catch (error) {
+    results.push({
+      name: 'Book content is not publicly accessible',
+      passed: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Test 9: rate_limits is not readable anonymously. The table backs the SQL
+  // function check_rate_limit() only (20260118000000_critical_fixes.sql);
+  // runtime limiting is Upstash/in-memory (lib/rate-limit.ts).
+  try {
+    const { data, error } = await withRetry(() =>
+      supabaseAnon.from('rate_limits').select('id').limit(1)
+    );
+    if (data && data.length > 0) {
+      results.push({
+        name: 'Rate limits are not publicly accessible',
+        passed: false,
+        error: 'Anonymous user was able to access rate_limits',
+      });
+    } else if (error && !error.message.includes('permission denied')) {
+      results.push({
+        name: 'Rate limits are not publicly accessible',
+        passed: false,
+        error: error.message,
+      });
+    } else {
+      results.push({ name: 'Rate limits are not publicly accessible', passed: true });
+    }
+  } catch (error) {
+    results.push({
+      name: 'Rate limits are not publicly accessible',
+      passed: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Test 10: user_activities is owner-scoped (user_activities_owner_select),
+  // so anonymous clients must see zero rows.
+  try {
+    const { data, error } = await withRetry(() =>
+      supabaseAnon.from('user_activities').select('id').limit(1)
+    );
+    if (data && data.length > 0) {
+      results.push({
+        name: 'User activities are not publicly accessible',
+        passed: false,
+        error: 'Anonymous user was able to access user_activities',
+      });
+    } else if (error && !error.message.includes('permission denied')) {
+      results.push({
+        name: 'User activities are not publicly accessible',
+        passed: false,
+        error: error.message,
+      });
+    } else {
+      results.push({ name: 'User activities are not publicly accessible', passed: true });
+    }
+  } catch (error) {
+    results.push({
+      name: 'User activities are not publicly accessible',
+      passed: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   return results;
 }
 
