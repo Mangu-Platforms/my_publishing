@@ -167,6 +167,23 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
+    // ── F-02: gate the expensive Edge auth resolution ────────────────────────
+    // getEdgeAuthUser() is a blocking network round-trip on every call. Only
+    // two cases actually need the user resolved in middleware:
+    //   1. protected paths (isProtectedPath) — the signed-in gate below;
+    //   2. GET/HEAD on an auth page — the signed-in redirect away from
+    //      /login, /register and /reset-password.
+    // Rate-limited paths (Fix C8: /api/auth, /api/upload, POST /api/newsletter,
+    // POST /api/checkout) key their limits by IP or anonymous identity only
+    // (getRateLimitIdentity — never by user id), so they skip auth resolution
+    // entirely; their route handlers perform whatever auth they need.
+    const needsAuthResolution =
+      isProtectedPath(pathname) || ((method === 'GET' || method === 'HEAD') && isAuthRoute);
+
+    if (!needsAuthResolution) {
+      return response;
+    }
+
     const authUser = await getEdgeAuthUser(request);
     const userId = authUser.userId;
 
@@ -207,35 +224,88 @@ export async function middleware(request: NextRequest) {
 
     return response;
   } catch (error) {
-    // If middleware fails completely, allow public routes to proceed
-    const publicRoutes = [
-      '/',
-      '/books',
-      '/genres',
-      '/authors',
-      '/about',
-      '/audio',
-      '/comics',
-      '/contact',
-      '/discover',
-      '/papers',
-      '/readers-hub',
+    // F-02 (extends Task 1.5) — fail CLOSED on unexpected middleware errors.
+    // The old fallback listed '/api' as public, which re-opened EVERY API
+    // route — including protected /api/files — whenever the try block threw.
+    // With the scoped matcher the only paths that reach middleware are
+    // protected prefixes, auth pages and rate-limited API paths; on error only
+    // the latter two groups (whose fail-closed rate limiting already ran
+    // above) may pass through. Everything else is refused.
+    console.error('Middleware error — failing closed:', error);
+
+    const passThroughRoutes = [
       '/login',
       '/register',
       '/reset-password',
       '/verify-email',
-      '/api',
+      '/api/auth',
+      '/api/upload',
+      '/api/newsletter',
+      '/api/checkout',
     ];
-    const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+    const isPassThrough =
+      !isProtectedPath(pathname) && passThroughRoutes.some((route) => pathname.startsWith(route));
 
-    if (isPublicRoute) {
+    if (isPassThrough) {
       return response;
     }
 
-    return loginRedirect(request, pathname);
+    return pathname.startsWith('/api/')
+      ? authUnavailableResponse(request)
+      : loginRedirect(request, pathname);
   }
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // F-02: middleware runs ONLY on routes it actually gates — the union of:
+  //   - protected prefixes (keep in sync with isProtectedPath);
+  //   - rate-limited paths (fail-closed rate limiting, Fix C8);
+  //   - auth pages (Fix C8 POST limits + the signed-in GET redirect).
+  // Public content routes (/, /books, /genres, /authors, /discover, /audio,
+  // /comics, /papers, /readers-hub, …) no longer invoke middleware at all, so
+  // no public request can ever block on the Edge auth fetch.
+  //
+  // startsWith quirk: isProtectedPath('/readingroom') would be true, yet
+  // '/reading/:path*' below would NOT match it, leaving such a route
+  // uncovered. Verified against the app/ route tree (find app -type d,
+  // 2026-08-14): no app route starts with any prefix here without living
+  // under it ('/readers-hub' does not start with '/reading'; public
+  // '/authors' is intentionally unmatched — isProtectedPath exact-matches
+  // '/author'). Re-verify this list whenever adding routes that share one of
+  // these prefixes.
+  matcher: [
+    // Protected prefixes (must be signed in; roles enforced server-side)
+    '/reading',
+    '/reading/:path*',
+    '/library',
+    '/library/:path*',
+    '/author',
+    '/author/:path*',
+    '/partner',
+    '/partner/:path*',
+    '/admin',
+    '/admin/:path*',
+    '/dashboard',
+    '/dashboard/:path*',
+    '/api/files',
+    '/api/files/:path*',
+    // Rate-limited API paths (Fix C8 — no auth resolution needed)
+    '/api/auth',
+    '/api/auth/:path*',
+    '/api/upload',
+    '/api/upload/:path*',
+    '/api/newsletter',
+    '/api/newsletter/:path*',
+    '/api/checkout',
+    '/api/checkout/:path*',
+    // Auth pages (POST rate limiting + signed-in redirect on GET/HEAD)
+    '/login',
+    '/login/:path*',
+    '/register',
+    '/register/:path*',
+    '/reset-password',
+    '/reset-password/:path*',
+    '/verify-email',
+    '/verify-email/:path*',
+  ],
 };
