@@ -1,6 +1,7 @@
 /* eslint-disable */
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Select,
@@ -40,6 +41,14 @@ export function BookFilters() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    },
+    []
+  );
+
   const pushWithParams = (params: URLSearchParams) => {
     const query = params.toString();
     router.push(query ? `${pathname ?? ''}?${query}` : (pathname ?? '/'));
@@ -64,26 +73,33 @@ export function BookFilters() {
         defaultValue={searchParams?.get('q') || ''}
         onChange={(e) => {
           const value = e.target.value;
-          const params = new URLSearchParams(searchParams?.toString() ?? '');
-          if (value) {
-            params.set('q', value);
-          } else {
-            params.delete('q');
-          }
-          params.delete('page');
-          pushWithParams(params);
+          if (searchDebounce.current) clearTimeout(searchDebounce.current);
+          // Debounce + replace: typing must not fire an RSC refetch and push a
+          // history entry per keystroke.
+          searchDebounce.current = setTimeout(() => {
+            const params = new URLSearchParams(searchParams?.toString() ?? '');
+            if (value) {
+              params.set('q', value);
+            } else {
+              params.delete('q');
+            }
+            params.delete('page');
+            const query = params.toString();
+            router.replace(query ? `${pathname ?? ''}?${query}` : (pathname ?? '/'));
+          }, 300);
         }}
         className="flex-1"
       />
       <Select
-        value={searchParams?.get('genre') || ''}
-        onValueChange={(value) => updateSearchParam('genre', value)}
+        value={searchParams?.get('genre') || 'all'}
+        onValueChange={(value) => updateSearchParam('genre', value === 'all' ? '' : value)}
       >
         <SelectTrigger aria-label="Filter by genre" className="w-full sm:w-[180px]">
           <SelectValue placeholder="All Genres" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All Genres</SelectItem>
+          {/* Radix SelectItem forbids value="" — 'all' maps to param removal. */}
+          <SelectItem value="all">All Genres</SelectItem>
           {genres.map((genre) => (
             <SelectItem key={genre} value={genre}>
               {genre}
