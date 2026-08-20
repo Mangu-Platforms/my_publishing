@@ -69,10 +69,6 @@ export default function AIInsightsPanel({
           title: 'Weekend Peak Detected',
           description:
             'Your book performs 20% better on weekends. Schedule promotions accordingly.',
-          action: {
-            label: 'Schedule Promotion',
-            href: `/dashboard/books/${bookId}/promotions`,
-          },
           icon: <Clock className="h-5 w-5 text-blue-500" />,
         });
       }
@@ -84,10 +80,6 @@ export default function AIInsightsPanel({
           priority: 'high',
           title: 'High Drop-off Points',
           description: `Chapters ${aiInsights.engagement.dropOffPoints.join(', ')} have significant reader drop-off.`,
-          action: {
-            label: 'Review Content',
-            href: `/dashboard/books/${bookId}/chapters`,
-          },
           icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
         });
       }
