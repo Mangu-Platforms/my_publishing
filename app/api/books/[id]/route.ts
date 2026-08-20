@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { enforceRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { resolveCallerAuthorIds } from '@/lib/api/author-scope';
 import { fetchBookForApi, patchBookForApi } from '@/lib/data/books';
 import { isMongoPrimary } from '@/lib/db/provider';
 
@@ -86,8 +87,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
-    if (profile.role !== 'admin' && existing.author_id && existing.author_id !== profile.id) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    // Ownership guard: books.author_id references authors.id, so resolve the
+    // caller's authors rows before comparing. A NULL author_id (orphaned via
+    // ON DELETE SET NULL) is admin-only — the old truthiness short-circuit
+    // let any author/partner edit orphaned books.
+    if (profile.role !== 'admin') {
+      const ownAuthorIds = await resolveCallerAuthorIds(profile.id);
+      if (!existing.author_id || !ownAuthorIds.includes(existing.author_id)) {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     const body = await request.json();
