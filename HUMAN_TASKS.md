@@ -5,7 +5,10 @@ does not have. Everything else is being executed autonomously. Ordered by priori
 
 ## Cowork control (do these first)
 
-### C0.0 Merge Phoenix WS2d PR #349 to `main` — BLOCKED ON YOU (2026-07-25)
+### C0.0 Merge Phoenix WS2d PR #349 to `main` — DONE (2026-07-25)
+
+**DONE — #349 squash-merged to `main` as `93a68cc` (feat(phoenix-ws2d): dual-run
+query layer for consumer + admin reads). Record below kept for history.**
 
 **PR:** https://github.com/redinc23/my_publishing/pull/349  
 **Branch:** `cursor/phoenix-ws2d-query-layer-a030`  
@@ -173,11 +176,11 @@ from the cowork PR manually.
 
 ## P1 — release governance
 
-### H1.1 Enable branch protection on `main`
+### H1.1 Enable branch protection on `main` — DONE
 
-Require the `test` and `format` status checks + 1 review. This single setting
-prevents most of the damage class seen this week (broken Dependabot major merged
-on red CI).
+**DONE — see "Completed by the repository recovery" below: one approval, strict
+`test` + `format` checks, linear history, conversation resolution, no
+force-pushes/deletion.** (This entry previously contradicted that record.)
 
 ### H1.2 Decide Project Phoenix vs. current Supabase stack
 

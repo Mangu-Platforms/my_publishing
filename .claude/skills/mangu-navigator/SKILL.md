@@ -35,9 +35,9 @@ throughout the migration — that constraint shapes everything.
 
 **Two missions, two scoreboards (details: `references/prosperity-ledger.md`):**
 
-| Ledger | Authority | Goal |
-| --- | --- | --- |
-| **A — Launch** | `docs/NEXT_GO.md` | Hard gates G1–G13 all TRUE ⇒ GO / v1.0.0 release |
+| Ledger          | Authority                              | Goal                                                           |
+| --------------- | -------------------------------------- | -------------------------------------------------------------- |
+| **A — Launch**  | `docs/NEXT_GO.md`                      | Hard gates G1–G13 all TRUE ⇒ GO / v1.0.0 release               |
 | **B — Phoenix** | `docs/PROJECT_PHOENIX.md` (v4.0/4.0.1) | Supabase → Better Auth/Mongo/Blob; North Stars 1–8 certifiable |
 
 Phoenix is **ACTIVE** (owner Faith Beckwith reactivated it 2026-07-20; recorded
@@ -78,8 +78,9 @@ over `git log`. Start every session:
 5. **No secrets in the repo, logs, evidence, or screenshots** — ever. Missing
    credential ⇒ write the exact console click-path into `HUMAN_TASKS.md` and
    continue with unblocked work. Never fabricate credentials.
-6. **CI green on every PR** (Jest + Playwright). Baseline is 127/127 unit tests
-   passing — you may not make the baseline worse. Never merge red.
+6. **CI green on every PR** (Jest + Playwright). Baseline is 740/740 unit tests
+   across 66 suites (@ `main` 2bfebf7, 2026-08-20) — you may not make the
+   baseline worse. Never merge red.
 7. **Feature freeze.** No new product features outside migration parity, WS6
    hardening, and NEXT_GO §8 permitted classes.
 8. **Evidence is append-only.** `docs/OPERATOR_QA_LOG.md` never gets rewritten —
@@ -135,21 +136,21 @@ fresh code-level signals before each SCOUT pass.
 Full matrix with docs + verification commands: `references/task-router.md`.
 Quick routes:
 
-| Task smells like… | Load | Plus read |
-| --- | --- | --- |
-| Order/priorities/PR mechanics | `phoenix-contract` | `CLAUDE.md`, doc §4.3/§5 |
-| Auth, sessions, forced reset, middleware | `better-auth-mangu` | recon §5, `lib/auth.ts` |
-| Mongo schema, indexes, queries | `mongodb-atlas-mangu` | `types/`, doc §4.2 |
-| Checkout, webhook, orders | `stripe-webhook-mangu` | `docs/STRIPE_WEBHOOK_PRODUCTION.md` |
-| Env vars, secrets, validate-env | `mangu-env-and-secrets` | `.env*.example`, `scripts/validate-env.ts` |
-| Incidents, health, rollback | `mangu-ops-runbook` | `docs/ROLLBACK.md` |
-| Data export/transform/import | `phoenix-data-migration` | doc §5.5 |
-| File storage, Blob migration | `phoenix-storage-blob` | doc §3.4/§8 spec in `CLAUDE.md` |
-| CI workflows, flaky tests | `mangu-ci-quality` | `.github/workflows/` |
-| MCP tools at `/api/mcp` | `mcp-catalog-ops` | `docs/MCP_SERVER.md` |
-| Roles/permissions/admin | `mangu-rbac-admin` | recon role model (no `editor`!) |
-| Cutover day | `phoenix-cutover` | doc §5.6–5.8 |
-| "Improve the product / UI / features / growth" | (this skill) §4b engine | `references/enhancement-engine.md`, `docs/ENHANCEMENT_LEDGER.md` |
+| Task smells like…                              | Load                     | Plus read                                                        |
+| ---------------------------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| Order/priorities/PR mechanics                  | `phoenix-contract`       | `CLAUDE.md`, doc §4.3/§5                                         |
+| Auth, sessions, forced reset, middleware       | `better-auth-mangu`      | recon §5, `lib/auth.ts`                                          |
+| Mongo schema, indexes, queries                 | `mongodb-atlas-mangu`    | `types/`, doc §4.2                                               |
+| Checkout, webhook, orders                      | `stripe-webhook-mangu`   | `docs/STRIPE_WEBHOOK_PRODUCTION.md`                              |
+| Env vars, secrets, validate-env                | `mangu-env-and-secrets`  | `.env*.example`, `scripts/validate-env.ts`                       |
+| Incidents, health, rollback                    | `mangu-ops-runbook`      | `docs/ROLLBACK.md`                                               |
+| Data export/transform/import                   | `phoenix-data-migration` | doc §5.5                                                         |
+| File storage, Blob migration                   | `phoenix-storage-blob`   | doc §3.4/§8 spec in `CLAUDE.md`                                  |
+| CI workflows, flaky tests                      | `mangu-ci-quality`       | `.github/workflows/`                                             |
+| MCP tools at `/api/mcp`                        | `mcp-catalog-ops`        | `docs/MCP_SERVER.md`                                             |
+| Roles/permissions/admin                        | `mangu-rbac-admin`       | recon role model (no `editor`!)                                  |
+| Cutover day                                    | `phoenix-cutover`        | doc §5.6–5.8                                                     |
+| "Improve the product / UI / features / growth" | (this skill) §4b engine  | `references/enhancement-engine.md`, `docs/ENHANCEMENT_LEDGER.md` |
 
 ## 6. Repo map & scoreboards
 
