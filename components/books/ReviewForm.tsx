@@ -74,12 +74,12 @@ export function ReviewForm({ bookId, existingReview, onClose }: ReviewFormProps)
   };
 
   return (
-    <div className="rounded-lg border bg-white p-6">
+    <div className="rounded-lg border bg-card p-6">
       <div className="mb-6">
         <h3 className="mb-2 text-lg font-semibold">
           {existingReview ? 'Edit Your Review' : 'Write a Review'}
         </h3>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Share your thoughts about this book with other readers
         </p>
       </div>
@@ -124,7 +124,9 @@ export function ReviewForm({ bookId, existingReview, onClose }: ReviewFormProps)
           />
           <div className="mt-1 flex justify-between">
             {errors.content && <p className="text-sm text-red-500">{errors.content.message}</p>}
-            <p className="ml-auto text-sm text-gray-500">{watch('content')?.length || 0}/5000</p>
+            <p className="ml-auto text-sm text-muted-foreground">
+              {watch('content')?.length || 0}/5000
+            </p>
           </div>
         </div>
 
@@ -135,7 +137,7 @@ export function ReviewForm({ bookId, existingReview, onClose }: ReviewFormProps)
             checked={isSpoiler}
             onCheckedChange={(checked: boolean) => setValue('is_spoiler', checked)}
           />
-          <label htmlFor="is_spoiler" className="cursor-pointer text-sm text-gray-700">
+          <label htmlFor="is_spoiler" className="cursor-pointer text-sm text-foreground">
             This review contains spoilers
           </label>
         </div>
