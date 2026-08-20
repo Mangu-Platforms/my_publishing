@@ -14,6 +14,15 @@ interface CheckoutSearchParams {
   slug?: string;
 }
 
+/** Checkout URL preserving the book selection, for post-login return trips. */
+function checkoutPath(params: CheckoutSearchParams): string {
+  const query = new URLSearchParams();
+  if (params.book_id) query.set('book_id', params.book_id);
+  if (params.slug) query.set('slug', params.slug);
+  const qs = query.toString();
+  return qs ? `/checkout?${qs}` : '/checkout';
+}
+
 async function startCheckout(formData: FormData) {
   'use server';
 
@@ -25,7 +34,9 @@ async function startCheckout(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login');
+    redirect(
+      `/login?next=${encodeURIComponent(checkoutPath({ book_id: bookId, slug: bookSlug }))}`
+    );
   }
 
   // Dual-run catalog read (WS2d.1). Auth remains AUTH_PROVIDER until cutover.
@@ -72,7 +83,7 @@ export default async function CheckoutPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login');
+    redirect(`/login?next=${encodeURIComponent(checkoutPath(searchParams))}`);
   }
 
   const book = await fetchPublishedBookForCheckout(searchParams);
