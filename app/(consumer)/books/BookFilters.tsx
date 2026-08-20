@@ -75,9 +75,11 @@ export function BookFilters() {
           const value = e.target.value;
           if (searchDebounce.current) clearTimeout(searchDebounce.current);
           // Debounce + replace: typing must not fire an RSC refetch and push a
-          // history entry per keystroke.
+          // history entry per keystroke. Read the LIVE URL at fire time — the
+          // render-time snapshot would drop a genre/sort change made during
+          // the debounce window.
           searchDebounce.current = setTimeout(() => {
-            const params = new URLSearchParams(searchParams?.toString() ?? '');
+            const params = new URLSearchParams(window.location.search);
             if (value) {
               params.set('q', value);
             } else {

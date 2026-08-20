@@ -128,14 +128,27 @@ async function isAuthorOwner(userId: string, bookAuthorId: string): Promise<bool
   if (!bookAuthorId) return false;
 
   if (isMongoPrimary()) {
-    const { getDb } = await import('@/lib/mongodb');
+    const [{ getDb }, { ObjectId }] = await Promise.all([
+      import('@/lib/mongodb'),
+      import('mongodb'),
+    ]);
     const db = await getDb();
     const profile = await db.collection('profiles').findOne({ auth_user_id: userId });
     if (!profile) return false;
+    // Constrain by BOTH the book's author id and the caller's profile — a
+    // profile can hold multiple pen names, so a lookup by profile alone can
+    // return the wrong row and 403 a real owner.
+    const idMatchers: Array<Record<string, unknown>> = [{ _id: bookAuthorId as never }];
+    if (/^[a-fA-F0-9]{24}$/.test(bookAuthorId)) {
+      idMatchers.push({ _id: new ObjectId(bookAuthorId) as never });
+    }
     const author = await db.collection('authors').findOne({
-      $or: [{ profile_id: profile._id as never }, { profile_id: String(profile._id) }],
+      $and: [
+        { $or: idMatchers },
+        { $or: [{ profile_id: profile._id as never }, { profile_id: String(profile._id) }] },
+      ],
     });
-    return author !== null && String(author._id) === bookAuthorId;
+    return author !== null;
   }
 
   const { createClient } = await import('@/lib/supabase/admin');
@@ -147,14 +160,15 @@ async function isAuthorOwner(userId: string, bookAuthorId: string): Promise<bool
     .maybeSingle();
   if (profileError || !profile) return false;
 
+  // Both constraints in one query — membership, not first-row equality.
   const { data: author, error: authorError } = await admin
     .from('authors')
     .select('id')
     .eq('profile_id', profile.id)
+    .eq('id', bookAuthorId)
     .limit(1)
     .maybeSingle();
-  if (authorError || !author) return false;
-  return author.id === bookAuthorId;
+  return !authorError && author !== null;
 }
 
 async function getUserRole(userId: string): Promise<string> {

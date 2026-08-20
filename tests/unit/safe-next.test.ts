@@ -29,6 +29,16 @@ describe('sanitizeNextPath', () => {
     expect(sanitizeNextPath('\\/evil.example')).toBe('/');
   });
 
+  it('rejects control-char smuggling that URL parsers strip (tab/CR/LF)', () => {
+    // new URL('/\t/evil.example', base) resolves to https://evil.example/
+    expect(sanitizeNextPath('/\t/evil.example')).toBe('/');
+    expect(sanitizeNextPath('/\n/evil.example')).toBe('/');
+    expect(sanitizeNextPath('/\r/evil.example')).toBe('/');
+    // Plain spaces are not stripped by URL parsing; only C0 controls are.
+    expect(sanitizeNextPath('/my library')).toBe('/my library');
+    expect(sanitizeNextPath('/lib\0rary')).toBe('/');
+  });
+
   it('rejects paths not starting with /', () => {
     expect(sanitizeNextPath('library')).toBe('/');
     expect(sanitizeNextPath('javascript:alert(1)')).toBe('/');

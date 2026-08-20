@@ -95,8 +95,10 @@ export default async function CheckoutPage({
 
   const authorName = book.author?.profile?.full_name || book.author?.pen_name || 'Unknown Author';
   const listPrice = formatPrice(book.price);
-  const salePrice = formatPrice(book.discount_price);
-  const payablePrice = formatPrice(book.discount_price ?? book.price) ?? '—';
+  // Numeric truthiness on purpose: discount_price 0 means "no discount",
+  // mirroring the Stripe charge in startCheckout (discount_price || price).
+  const salePrice = book.discount_price ? formatPrice(book.discount_price) : null;
+  const payablePrice = formatPrice(book.discount_price || book.price) ?? '—';
 
   return (
     <Section>

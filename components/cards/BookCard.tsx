@@ -46,7 +46,9 @@ export function BookCard({ book, variant = 'default', href }: BookCardProps) {
   // Support both Supabase (average_rating) and Mongo/ApiBook (avg_rating) field names
   const displayRating = book.average_rating ?? book.avg_rating;
   const listPrice = formatPrice(book.price);
-  const salePrice = formatPrice(book.discount_price);
+  // Numeric truthiness on purpose: discount_price 0 means "no discount",
+  // matching the pre-existing display and Stripe-charge semantics.
+  const salePrice = book.discount_price ? formatPrice(book.discount_price) : null;
 
   if (variant === 'compact') {
     return (

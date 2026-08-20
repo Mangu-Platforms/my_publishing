@@ -123,9 +123,12 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
   const penName =
     ((book.author as Record<string, unknown> | undefined)?.['pen_name'] as string) ??
     'Unknown Author';
-  const offerPrice = book.discount_price ?? book.price;
+  // Numeric truthiness on purpose: discount_price 0 means "no discount",
+  // matching Stripe-charge semantics (discount_price || price) and the
+  // pre-existing display.
+  const offerPrice = book.discount_price || book.price;
   const listPrice = formatPrice(book.price);
-  const salePrice = formatPrice(book.discount_price);
+  const salePrice = book.discount_price ? formatPrice(book.discount_price) : null;
 
   return (
     <div>

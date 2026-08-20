@@ -7,5 +7,9 @@
 export function sanitizeNextPath(next: string | null | undefined): string {
   if (!next) return '/';
   if (!next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/';
+  // WHATWG URL parsing strips tab/CR/LF before resolving, so "/\t/evil.com"
+  // would collapse to protocol-relative "//evil.com" at the redirect sink.
+  // Reject every C0 control character outright.
+  if (/[\x00-\x1f]/.test(next)) return '/';
   return next;
 }
