@@ -92,10 +92,9 @@ export const metadata: Metadata = {
     creator: '@mangupublishers',
     site: '@mangupublishers',
   },
-  alternates: {
-    canonical: SITE_URL,
-    languages: { 'en-US': SITE_URL },
-  },
+  // No alternates here: Next metadata inheritance would stamp the homepage
+  // as canonical on every page without its own alternates block — a
+  // de-indexing signal. Each page declares its own canonical instead.
   verification: {},
   icons: {
     icon: [
@@ -162,7 +161,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               following it moves the scroll position but not keyboard focus. With
               both, the skip link is a working WCAG 2.4.1 (Level A) bypass block.
             */}
-            <main id="main-content" tabIndex={-1} className="flex-1">{children}</main>
+            <main id="main-content" tabIndex={-1} className="flex-1">
+              {children}
+            </main>
             <Footer newsletterEnabled={newsletterEnabled} />
           </div>
         </Providers>
