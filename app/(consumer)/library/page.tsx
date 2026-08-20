@@ -55,11 +55,14 @@ export default async function LibraryPage() {
     ) {
       throw error;
     }
-    const message = error instanceof Error ? error.message : 'Failed to load your library.';
+    // Log the real error server-side; show the user a static message. The
+    // page runs server-side, so error.message here would flow verbatim to the
+    // HTML with no Next.js redaction (unlike client error boundaries).
+    console.error('Library: fetch failed', error);
     return (
       <div className="min-h-screen bg-[#12100e] text-[#f5f1ea]">
         <h1 className="sr-only">Your Library</h1>
-        <LibraryError message={message} />
+        <LibraryError message="We hit a problem loading your library. Please try again in a moment." />
       </div>
     );
   }
