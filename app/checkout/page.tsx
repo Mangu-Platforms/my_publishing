@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/server';
 import { fetchPublishedBookForCheckout } from '@/lib/data/books';
 import { createCheckoutSession } from '@/lib/stripe/server';
+import { formatPrice } from '@/lib/utils/format-price';
 
 interface CheckoutSearchParams {
   book_id?: string;
@@ -93,6 +94,9 @@ export default async function CheckoutPage({
   }
 
   const authorName = book.author?.profile?.full_name || book.author?.pen_name || 'Unknown Author';
+  const listPrice = formatPrice(book.price);
+  const salePrice = formatPrice(book.discount_price);
+  const payablePrice = formatPrice(book.discount_price ?? book.price) ?? '—';
 
   return (
     <Section>
@@ -106,20 +110,34 @@ export default async function CheckoutPage({
             <div className="mt-6 flex flex-col gap-6 sm:flex-row">
               <div className="relative h-56 w-40 overflow-hidden rounded-md bg-muted">
                 {book.cover_url && (
-                  <Image src={book.cover_url} alt={book.title} fill className="object-cover" />
+                  <Image
+                    src={book.cover_url}
+                    alt={book.title}
+                    fill
+                    sizes="160px"
+                    className="object-cover"
+                  />
                 )}
               </div>
               <div className="flex-1">
                 <h2 className="text-2xl font-semibold">{book.title}</h2>
                 <p className="mt-1 text-secondary">by {authorName}</p>
                 <div className="mt-4 text-xl font-semibold">
-                  {book.discount_price ? (
+                  {salePrice ? (
                     <>
-                      <span className="mr-2 text-secondary line-through">${book.price}</span>
-                      <span className="text-primary">${book.discount_price}</span>
+                      {listPrice && (
+                        <span className="mr-2 text-secondary line-through">
+                          <span className="sr-only">Original price </span>
+                          {listPrice}
+                        </span>
+                      )}
+                      <span className="text-primary">
+                        <span className="sr-only">Sale price </span>
+                        {salePrice}
+                      </span>
                     </>
                   ) : (
-                    <span>${book.price}</span>
+                    listPrice && <span>{listPrice}</span>
                   )}
                 </div>
                 <div className="mt-4 text-sm text-secondary">
@@ -136,7 +154,7 @@ export default async function CheckoutPage({
             <h3 className="text-xl font-semibold">Order summary</h3>
             <div className="mt-4 flex items-center justify-between text-sm text-secondary">
               <span>Subtotal</span>
-              <span>${book.discount_price ?? book.price}</span>
+              <span>{payablePrice}</span>
             </div>
             <div className="mt-2 flex items-center justify-between text-sm text-secondary">
               <span>Taxes</span>
@@ -144,7 +162,7 @@ export default async function CheckoutPage({
             </div>
             <div className="mt-6 flex items-center justify-between border-t pt-4 font-semibold">
               <span>Total</span>
-              <span>${book.discount_price ?? book.price}</span>
+              <span>{payablePrice}</span>
             </div>
             <form action={startCheckout} className="mt-6 space-y-2">
               <input type="hidden" name="book_id" value={book.id} />
