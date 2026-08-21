@@ -1,6 +1,9 @@
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
 // Phoenix WS2d — dual-run catalog layer
 import { fetchBookForApi, listPublishedBooks } from '@/lib/data/books';
+import { BookJsonLd } from '@/components/seo';
+import { formatPrice } from '@/lib/utils/format-price';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 import { Button } from '@/components/ui/button';
@@ -22,9 +25,11 @@ import { getSiteUrl } from '@/lib/seo/siteUrl';
 // labels and https validation live in the shared book field contract.
 import { retailerLinksFrom } from '@/lib/books/fields';
 
-async function getBook(slug: string): Promise<ApiBook | null> {
+// cache() deduplicates the generateMetadata + page-body lookups into one
+// request-scoped fetch (the dual-run provider call stays untouched).
+const getBook = cache(async (slug: string): Promise<ApiBook | null> => {
   return fetchBookForApi({ slug });
-}
+});
 
 async function getSimilarBooks(genre: string | undefined, excludeId: string) {
   const { books } = await listPublishedBooks({ genre, perPage: 7 });
@@ -61,6 +66,15 @@ export async function generateMetadata({
     `Read ${book.title} by ${((book.author as Record<string, unknown> | undefined)?.['pen_name'] as string) ?? 'Unknown Author'}`;
   const pageUrl = `${getSiteUrl()}/books/${params.slug}`;
 
+  const ogImage = book.cover_url
+    ? { url: book.cover_url, alt: `Cover of ${book.title}` }
+    : {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'MANGU Publishers - Your digital publishing platform',
+      };
+
   return {
     title: book.title,
     description,
@@ -71,16 +85,15 @@ export async function generateMetadata({
       title: book.title,
       description,
       url: pageUrl,
-      images: [
-        book.cover_url
-          ? { url: book.cover_url, alt: `Cover of ${book.title}` }
-          : {
-              url: '/og-image.png',
-              width: 1200,
-              height: 630,
-              alt: 'MANGU Publishers - Your digital publishing platform',
-            },
-      ],
+      images: [ogImage],
+    },
+    // A page-level twitter block replaces the layout's generic site card, so
+    // the cover has to be re-declared here or shares fall back to the logo.
+    twitter: {
+      card: 'summary_large_image',
+      title: book.title,
+      description,
+      images: [ogImage.url],
     },
   };
 }
@@ -92,8 +105,11 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
     notFound();
   }
 
-  const similarBooks = await getSimilarBooks(book.genre ?? undefined, book.id);
-  const reviewData = await getReviewData(book.id, book.author_id);
+  // Both depend only on the book — fetch them concurrently.
+  const [similarBooks, reviewData] = await Promise.all([
+    getSimilarBooks(book.genre ?? undefined, book.id),
+    getReviewData(book.id, book.author_id),
+  ]);
 
   // Normalise field names: ApiBook uses avg_rating; legacy Supabase shape uses average_rating
   const avgRating = (book.avg_rating ?? (book as Record<string, unknown>)['average_rating']) as
@@ -104,9 +120,38 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
     | undefined;
   const audioUrl = (book as Record<string, unknown>)['audio_url'] as string | undefined;
   const retailerLinks = retailerLinksFrom(book);
+  const penName =
+    ((book.author as Record<string, unknown> | undefined)?.['pen_name'] as string) ??
+    'Unknown Author';
+  // Numeric truthiness on purpose: discount_price 0 means "no discount",
+  // matching Stripe-charge semantics (discount_price || price) and the
+  // pre-existing display.
+  const offerPrice = book.discount_price || book.price;
+  const listPrice = formatPrice(book.price);
+  const salePrice = book.discount_price ? formatPrice(book.discount_price) : null;
 
   return (
     <div>
+      <BookJsonLd
+        title={book.title}
+        author={{
+          name: penName,
+          url: book.author_id ? `${getSiteUrl()}/authors/${book.author_id}` : undefined,
+        }}
+        description={book.description ?? undefined}
+        url={`${getSiteUrl()}/books/${params.slug}`}
+        coverUrl={book.cover_url ?? undefined}
+        genre={book.genre ?? undefined}
+        // aggregateRating is only truthful with actual reviews behind it.
+        rating={
+          avgRating && reviewData.totalReviews > 0
+            ? { value: Number(avgRating), count: reviewData.totalReviews }
+            : undefined
+        }
+        // Offer mirrors the visible price: discount wins when set.
+        price={offerPrice != null ? { amount: Number(offerPrice), currency: 'USD' } : undefined}
+      />
+
       {/* Hero Section */}
       <Section className="bg-muted">
         <Container>
@@ -117,6 +162,7 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
                   src={book.cover_url}
                   alt={`Cover of ${book.title}`}
                   fill
+                  sizes="(max-width: 768px) 100vw, 384px"
                   className="rounded-lg object-cover"
                   priority
                 />
@@ -158,13 +204,21 @@ export default async function BookDetailPage({ params }: { params: { slug: strin
                 <WishlistButton bookId={book.id} />
               </div>
               <div className="text-2xl font-bold">
-                {book.discount_price ? (
+                {salePrice ? (
                   <>
-                    <span className="mr-2 text-secondary line-through">${book.price}</span>
-                    <span className="text-primary">${book.discount_price}</span>
+                    {listPrice && (
+                      <span className="mr-2 text-secondary line-through">
+                        <span className="sr-only">Original price </span>
+                        {listPrice}
+                      </span>
+                    )}
+                    <span className="text-primary">
+                      <span className="sr-only">Sale price </span>
+                      {salePrice}
+                    </span>
                   </>
                 ) : (
-                  <span>${book.price}</span>
+                  listPrice && <span>{listPrice}</span>
                 )}
               </div>
               {retailerLinks.length > 0 && (

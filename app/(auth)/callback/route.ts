@@ -1,13 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { type NextRequest } from 'next/server';
-
-/** Only allow same-origin path redirects (never absolute/protocol-relative URLs). */
-function sanitizeNextPath(next: string | null): string {
-  if (!next) return '/';
-  if (!next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/';
-  return next;
-}
+import { sanitizeNextPath } from '@/lib/utils/safe-next';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);

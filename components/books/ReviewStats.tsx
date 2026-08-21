@@ -17,7 +17,7 @@ export function ReviewStats({ averageRating, totalReviews, ratingDistribution }:
     return Array.from({ length: 5 }, (_, i) => (
       <Star
         key={i}
-        className={`h-4 w-4 ${i < rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+        className={`h-4 w-4 ${i < rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'}`}
       />
     ));
   };
@@ -26,9 +26,9 @@ export function ReviewStats({ averageRating, totalReviews, ratingDistribution }:
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
       {/* Average Rating */}
       <div className="text-center">
-        <div className="mb-2 text-4xl font-bold text-gray-900">{averageRating.toFixed(1)}</div>
+        <div className="mb-2 text-4xl font-bold text-foreground">{averageRating.toFixed(1)}</div>
         <div className="mb-2 flex justify-center">{getStars(Math.round(averageRating))}</div>
-        <div className="text-gray-600">
+        <div className="text-muted-foreground">
           Based on {totalReviews.toLocaleString()} review{totalReviews !== 1 ? 's' : ''}
         </div>
       </div>
@@ -45,13 +45,13 @@ export function ReviewStats({ averageRating, totalReviews, ratingDistribution }:
                 <span className="text-sm font-medium">{rating}</span>
                 <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
               </div>
-              <div className="h-2 flex-1 rounded-full bg-gray-200">
+              <div className="h-2 flex-1 rounded-full bg-muted">
                 <div
                   className="h-2 rounded-full bg-yellow-400 transition-all duration-300"
                   style={{ width: `${percentage}%` }}
                 />
               </div>
-              <div className="w-8 text-right text-sm text-gray-600">{count}</div>
+              <div className="w-8 text-right text-sm text-muted-foreground">{count}</div>
             </div>
           );
         })}

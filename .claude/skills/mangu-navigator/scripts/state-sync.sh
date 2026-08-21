@@ -91,7 +91,7 @@ fi
 echo
 echo "[quality signals]"
 [[ -x scripts/ci-local.sh ]] && echo "  local CI parity: ./scripts/ci-local.sh" || echo "  scripts/ci-local.sh not found"
-echo "  unit baseline expectation: 127/127 (do not regress)"
+echo "  unit baseline expectation: 740/740 across 66 suites @ 2026-08-20 (do not regress)"
 
 if [[ ${PROBE} -eq 1 ]]; then
   echo

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { signIn } from './actions';
 import { normalizeAuthErrorMessage } from '@/lib/auth/error-messages';
+import { sanitizeNextPath } from '@/lib/utils/safe-next';
 import { PASSWORD_REQUIRED_MESSAGE } from '@/lib/auth/password-policy';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 
@@ -69,8 +70,9 @@ export function LoginForm() {
         setIsLoading(false);
       } else {
         // Full-page navigation so the client-side Supabase session picks up
-        // the auth cookies set by the server action.
-        window.location.assign('/');
+        // the auth cookies set by the server action. Honor ?next= (middleware
+        // and checkout send users here with their original destination).
+        window.location.assign(sanitizeNextPath(searchParams?.get('next')));
       }
     } catch {
       setError('An unexpected error occurred');

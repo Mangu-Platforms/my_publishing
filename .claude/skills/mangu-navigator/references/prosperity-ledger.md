@@ -9,36 +9,36 @@ re-verify state lines with `scripts/state-sync.sh` before quoting them.
 
 All-true rule: any FALSE/PENDING/stale-SHA gate ⇒ NO-GO (CCR-003, CCR-005).
 
-| Gate | Meaning | State @ snapshot | Typical mover |
-| --- | --- | --- | --- |
-| G1 | main deployment READY on canonical platform | FALSE | Phase 14 deploy dossier (operator) |
-| G2 | CI green on the exact release SHA | FALSE (main CI green, but not on a release SHA) | Release-cut CI run |
-| G3 | Auth evidence package complete | FALSE | Phase 12 manual QA (real backend) |
-| G4 | Purchase → order → library → reading proven | FALSE | Phase 13 Stripe correlation package |
-| G5 | RBAC smokes pass | FALSE | Phase 12 RBAC evidence |
-| G6 | No false-success public surfaces | FALSE (fixes merged; live QA pending) | Phase 12 live acceptance |
-| G7 | `/api/health?ready=1` → `ready:true` in prod | FALSE in doc; **live probe 2026-07-20 returned `ready:true` on www** — gate stays FALSE until evidenced at an exact SHA and appended to the QA log (CCR-002/005). Cheap win: capture that evidence. | Evidence append + Phase 14 confirm |
-| G8 | Prod Stripe webhook registered + signed test event | FALSE | Stripe console + evidence |
-| G9 | ADR signed; monitors on real prod; DNS canonical | FALSE (ADR ACCEPTED-B; apex DNS still split) | Vercel env + apex DNS cutover |
-| G10 | Manual QA rows 1–10 complete | FALSE (rows blank) | Operator QA session |
-| G11 | Known-good revision + rehearsed rollback | FALSE | Rollback rehearsal transcript |
-| G12 | Baseline refreshed at release SHA | PARTIAL (recurring per CCR-020) | Refresh commit at cut |
-| G13 | Authority doc tracked on main | **TRUE** | — |
+| Gate | Meaning                                            | State @ snapshot                                                                                                                                                                                    | Typical mover                       |
+| ---- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| G1   | main deployment READY on canonical platform        | FALSE                                                                                                                                                                                               | Phase 14 deploy dossier (operator)  |
+| G2   | CI green on the exact release SHA                  | FALSE (main CI green, but not on a release SHA)                                                                                                                                                     | Release-cut CI run                  |
+| G3   | Auth evidence package complete                     | FALSE                                                                                                                                                                                               | Phase 12 manual QA (real backend)   |
+| G4   | Purchase → order → library → reading proven        | FALSE                                                                                                                                                                                               | Phase 13 Stripe correlation package |
+| G5   | RBAC smokes pass                                   | FALSE                                                                                                                                                                                               | Phase 12 RBAC evidence              |
+| G6   | No false-success public surfaces                   | FALSE (fixes merged; live QA pending)                                                                                                                                                               | Phase 12 live acceptance            |
+| G7   | `/api/health?ready=1` → `ready:true` in prod       | FALSE in doc; **live probe 2026-07-20 returned `ready:true` on www** — gate stays FALSE until evidenced at an exact SHA and appended to the QA log (CCR-002/005). Cheap win: capture that evidence. | Evidence append + Phase 14 confirm  |
+| G8   | Prod Stripe webhook registered + signed test event | FALSE                                                                                                                                                                                               | Stripe console + evidence           |
+| G9   | ADR signed; monitors on real prod; DNS canonical   | FALSE (ADR ACCEPTED-B; apex DNS still split)                                                                                                                                                        | Vercel env + apex DNS cutover       |
+| G10  | Manual QA rows 1–10 complete                       | FALSE (rows blank)                                                                                                                                                                                  | Operator QA session                 |
+| G11  | Known-good revision + rehearsed rollback           | FALSE                                                                                                                                                                                               | Rollback rehearsal transcript       |
+| G12  | Baseline refreshed at release SHA                  | PARTIAL (recurring per CCR-020)                                                                                                                                                                     | Refresh commit at cut               |
+| G13  | Authority doc tracked on main                      | **TRUE**                                                                                                                                                                                            | —                                   |
 
 Supporting backlog: P0-001…P0-020 (issues #186–#205). P0 > P1 > P2, always.
 
 ## Ledger B — Phoenix North Stars (authority: `docs/PROJECT_PHOENIX.md` §1.2)
 
-| # | Star | Certify with | State @ snapshot |
-| --- | --- | --- | --- |
-| 1 | Build integrity | `npm run build` exit 0, zero warnings | Attainable locally; certify at end |
-| 2 | Operational health | prod `GET /api/health?ready=1` → `{"ready":true}` | Observed TRUE live 2026-07-20 (Supabase path); needs QA-log evidence, and must hold post-cutover (ties G7) |
-| 3 | User confidence | 22-point QA suite in prod (Phoenix §6.1) | Not started (human-run, agent-supported) |
-| 4 | Process completion | PRs #1–#6 merged, Vercel prod green | **WS1 merged (#304)**; WS2–WS6 open |
-| 5 | Data sovereignty | mongodump stored securely | Human gate, Phase 15 |
-| 6 | Clean codebase | `grep -ri "supabase" app/ lib/ components/ types/` → 0 code hits | ~109 files at snapshot (dual-run peak; falls in WS2d/WS4) |
-| 7 | User transition | Forced-reset batch executed + telemetry | Script exists (`scripts/request-password-reset.ts`); batch is Phase 11 |
-| 8 | Platform hardening | 429s verified, Sentry receiving, logs draining | WS6 |
+| #   | Star               | Certify with                                                     | State @ snapshot                                                                                           |
+| --- | ------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 1   | Build integrity    | `npm run build` exit 0, zero warnings                            | Attainable locally; certify at end                                                                         |
+| 2   | Operational health | prod `GET /api/health?ready=1` → `{"ready":true}`                | Observed TRUE live 2026-07-20 (Supabase path); needs QA-log evidence, and must hold post-cutover (ties G7) |
+| 3   | User confidence    | 22-point QA suite in prod (Phoenix §6.1)                         | Not started (human-run, agent-supported)                                                                   |
+| 4   | Process completion | PRs #1–#6 merged, Vercel prod green                              | **WS1 merged (#304)**; WS2–WS6 open                                                                        |
+| 5   | Data sovereignty   | mongodump stored securely                                        | Human gate, Phase 15                                                                                       |
+| 6   | Clean codebase     | `grep -ri "supabase" app/ lib/ components/ types/` → 0 code hits | ~109 files at snapshot (dual-run peak; falls in WS2d/WS4)                                                  |
+| 7   | User transition    | Forced-reset batch executed + telemetry                          | Script exists (`scripts/request-password-reset.ts`); batch is Phase 11                                     |
+| 8   | Platform hardening | 429s verified, Sentry receiving, logs draining                   | WS6                                                                                                        |
 
 Workstream order (strict, one PR each): **WS2a → 2b → 2c → 2d → WS3 → WS4 →
 WS5 → WS6**, then Phases 11–15 (migration window, mostly human-executed with
@@ -77,7 +77,7 @@ Run from repo root. Paste relevant output into PR bodies / QA log.
 # Individually
 npm run type-check          # tsc --noEmit, strict — must be clean
 npm run lint
-npm test                    # baseline 127/127 across 24 suites; never regress
+npm test                    # baseline 740/740 across 66 suites (2026-08-20); never regress
 npm run validate-env        # env schema sanity
 npm run build               # North Star #1 when 0 warnings
 

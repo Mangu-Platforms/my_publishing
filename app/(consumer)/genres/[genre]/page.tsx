@@ -16,8 +16,10 @@ export async function generateMetadata({ params }: GenrePageProps): Promise<Meta
   const displayName = genreName.charAt(0).toUpperCase() + genreName.slice(1);
 
   return {
-    title: `${displayName} Books | MANGU Publishers`,
+    // Root template appends "| MANGU Publishers" — no manual brand suffix.
+    title: `${displayName} Books`,
     description: `Browse ${displayName.toLowerCase()} books on MANGU Publishers. Discover new titles and bestsellers in ${displayName.toLowerCase()}.`,
+    alternates: { canonical: `/genres/${encodeURIComponent(genreName)}` },
   };
 }
 

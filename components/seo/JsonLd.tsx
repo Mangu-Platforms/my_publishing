@@ -77,7 +77,7 @@ interface OrganizationJsonLdProps {
 export function OrganizationJsonLd({
   name = 'MANGU Publishers',
   url = SITE_URL,
-  logo = `${SITE_URL}/logo.png`,
+  logo = `${SITE_URL}/icon-512.png`,
   description = TRUTHFUL_DESCRIPTION,
   sameAs = [
     // TODO(renee): HA-B14 — confirm these are accounts we control, or remove.
@@ -182,7 +182,7 @@ export function WebPageJsonLd({
       name: siteName,
       logo: {
         '@type': 'ImageObject',
-        url: `${SITE_URL}/logo.png`,
+        url: `${SITE_URL}/icon-512.png`,
         width: 512,
         height: 512,
       },
@@ -350,7 +350,7 @@ export function ArticleJsonLd({
   dateModified,
   author,
   publisher = 'MANGU Publishers',
-  publisherLogo = `${SITE_URL}/logo.png`,
+  publisherLogo = `${SITE_URL}/icon-512.png`,
 }: ArticleJsonLdProps) {
   const data: Record<string, unknown> = {
     '@context': 'https://schema.org',

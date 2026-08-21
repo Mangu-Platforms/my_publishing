@@ -19,8 +19,8 @@ import { isEmailConfigured } from '@/lib/email/send';
 
 export const metadata: Metadata = {
   title: 'Books from MANGU Publishers',
-  description:
-    'Browse the books MANGU Publishers has released and find out where to buy each one.',
+  description: 'Browse the books MANGU Publishers has released and find out where to buy each one.',
+  alternates: { canonical: '/' },
 };
 
 export default function HomePage() {

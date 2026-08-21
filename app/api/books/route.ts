@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { enforceRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { resolveCallerAuthorIds } from '@/lib/api/author-scope';
 import { createBookForApi, listPublishedBooks } from '@/lib/data/books';
 import { isMongoPrimary } from '@/lib/db/provider';
 
@@ -87,7 +88,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const authorId = parsed.data.author_id || profile.id;
+    // Attribution guard: non-admins may only publish under their own
+    // authors row; body author_id naming anyone else is rejected, not
+    // silently reattributed.
+    let authorId = parsed.data.author_id;
+    if (profile.role !== 'admin') {
+      const ownAuthorIds = await resolveCallerAuthorIds(profile.id);
+      if (ownAuthorIds.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'No author profile for this account' },
+          { status: 403 }
+        );
+      }
+      if (authorId && !ownAuthorIds.includes(authorId)) {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      }
+      authorId = authorId || ownAuthorIds[0];
+    } else if (!authorId) {
+      // profiles.id is not a valid books.author_id (FK → authors.id), so the
+      // old fallback could never insert; require the target author instead.
+      return NextResponse.json({ success: false, error: 'author_id is required' }, { status: 400 });
+    }
+
     const book = await createBookForApi({
       ...parsed.data,
       author_id: authorId,

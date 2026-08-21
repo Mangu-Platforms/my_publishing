@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server';
 import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { isMongoPrimary } from '@/lib/db/provider';
+import { hasCompletedOrderForBook } from '@/lib/reading/entitlement';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,6 +89,7 @@ async function getBookFile(bookId: string): Promise<BookFile | null> {
 
 async function userHasPurchased(userId: string, bookId: string): Promise<boolean> {
   if (isMongoPrimary()) {
+    // Mongo Order.user_id stores the *auth* user id (Phoenix A-6).
     const { getDb } = await import('@/lib/mongodb');
     const db = await getDb();
     const order = await db.collection('orders').findOne({
@@ -98,17 +100,75 @@ async function userHasPurchased(userId: string, bookId: string): Promise<boolean
     return order !== null;
   }
 
+  // Supabase orders.user_id stores profiles.id, NOT the auth user id (see
+  // lib/reading/entitlement.ts) — resolve the profile first, else purchasers
+  // can never match and every download 403s.
   const { createClient } = await import('@/lib/supabase/admin');
   const admin = createClient();
-  const { data } = await admin
-    .from('order_items')
-    .select('id, orders!inner(user_id, status)')
-    .eq('book_id', bookId)
-    .eq('orders.user_id', userId)
-    .eq('orders.status', 'completed')
+  const { data: profile, error } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error || !profile) return false;
+
+  try {
+    return await hasCompletedOrderForBook(admin, profile.id, bookId, userId);
+  } catch {
+    return false; // fail closed on lookup errors
+  }
+}
+
+/**
+ * True when the caller's authors row is the book's author.
+ * books.author_id references authors.id in both providers — never the auth
+ * user id — so the caller's authors row must be resolved before comparing.
+ */
+async function isAuthorOwner(userId: string, bookAuthorId: string): Promise<boolean> {
+  if (!bookAuthorId) return false;
+
+  if (isMongoPrimary()) {
+    const [{ getDb }, { ObjectId }] = await Promise.all([
+      import('@/lib/mongodb'),
+      import('mongodb'),
+    ]);
+    const db = await getDb();
+    const profile = await db.collection('profiles').findOne({ auth_user_id: userId });
+    if (!profile) return false;
+    // Constrain by BOTH the book's author id and the caller's profile — a
+    // profile can hold multiple pen names, so a lookup by profile alone can
+    // return the wrong row and 403 a real owner.
+    const idMatchers: Array<Record<string, unknown>> = [{ _id: bookAuthorId as never }];
+    if (/^[a-fA-F0-9]{24}$/.test(bookAuthorId)) {
+      idMatchers.push({ _id: new ObjectId(bookAuthorId) as never });
+    }
+    const author = await db.collection('authors').findOne({
+      $and: [
+        { $or: idMatchers },
+        { $or: [{ profile_id: profile._id as never }, { profile_id: String(profile._id) }] },
+      ],
+    });
+    return author !== null;
+  }
+
+  const { createClient } = await import('@/lib/supabase/admin');
+  const admin = createClient();
+  const { data: profile, error: profileError } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (profileError || !profile) return false;
+
+  // Both constraints in one query — membership, not first-row equality.
+  const { data: author, error: authorError } = await admin
+    .from('authors')
+    .select('id')
+    .eq('profile_id', profile.id)
+    .eq('id', bookAuthorId)
     .limit(1)
     .maybeSingle();
-  return data !== null;
+  return !authorError && author !== null;
 }
 
 async function getUserRole(userId: string): Promise<string> {
@@ -149,10 +209,10 @@ export async function GET(
   // 3. Authorisation: admin, or author-owner, or paying customer
   const role = await getUserRole(userId);
   const isAdmin = role === 'admin';
-  const isAuthorOwner = book.author_id === userId;
-  const hasPurchased = !isAdmin && !isAuthorOwner && (await userHasPurchased(userId, bookId));
+  const ownsAsAuthor = !isAdmin && (await isAuthorOwner(userId, book.author_id));
+  const hasPurchased = !isAdmin && !ownsAsAuthor && (await userHasPurchased(userId, bookId));
 
-  if (!isAdmin && !isAuthorOwner && !hasPurchased) {
+  if (!isAdmin && !ownsAsAuthor && !hasPurchased) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
