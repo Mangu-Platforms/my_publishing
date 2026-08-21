@@ -182,7 +182,10 @@ Open items, ranked:
    must be fixed before Phase 13–15.
 3. **No secret scanning on the canonical deploy path** — the pattern grep lives in legacy
    `cloudbuild.yaml`; a gitleaks step in `ci.yml` (or lint-staged) would close it. Similarly no
-   dependency-review/npm-audit step (CodeQL _does_ run via GitHub default setup on every PR).
+   dependency-review/npm-audit step (CodeQL _does_ run via GitHub default setup on every PR) —
+   and GitHub currently reports **85 open Dependabot alerts on the default branch
+   (41 high / 38 moderate / 6 low)** (surfaced on push, 2026-08-21; triage needed — the 9 open
+   dependabot PRs cover only a fraction).
 4. `rotate-supabase-key.yml`: unpinned third-party action (`gliech/create-github-secret-action@v1`)
    holding a secrets-write PAT; key passed as unmasked dispatch input; DELETE-then-POST env
    upsert can leave prod missing the var on partial failure.
@@ -243,8 +246,9 @@ The cheapest WS6 close: adopt it in API handlers (start with `middleware.ts`'s 3
 8. **WS4 dead-file sweep** (F8): delete the remaining zero-importer files beyond #398.
 9. **Doc hygiene batch** (F7): org rename refs, QA-log superseding note, recon suite-count note,
    `mongosh` prerequisite → HUMAN_TASKS.
-10. **Dependency hygiene**: rebase/merge dependabot #384–#392 after the queue lands; hold the
-    two `@supabase/*` bumps for last (WS4 deletes them).
+10. **Dependency hygiene**: triage the **85 open Dependabot alerts (41 high)** — map which are
+    dev-only/unreachable vs. runtime; rebase/merge dependabot #384–#392 after the queue lands;
+    hold the two `@supabase/*` bumps for last (WS4 deletes them).
 
 ### 7.3 Explicitly not now
 
