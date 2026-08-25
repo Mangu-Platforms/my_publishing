@@ -98,7 +98,7 @@ later.** This is the one item on the whole list that becomes impossible if misse
 **Priority:** **P0**
 
 ### HA-A5 — Sign ADR-001
-**Do:** Review `docs/architecture/ADR-001-catalog-and-identity-data-ownership.md` §2 (Option A)
+**Do:** Review `docs/architecture/ADR-003-catalog-and-identity-data-ownership.md` §2 (Option A)
 and §5 (rejected Options B and C) and sign it.
 **Why a human:** an ADR is an authority document; a bot cannot accept one, and G9 requires a
 signature.
@@ -445,7 +445,7 @@ conflicting — with a field-by-field decision for every conflict.
 
 ### HA-C6 — Resolve the ADR-001 numbering collision
 **Do:** `docs/adr/ADR-001-canonical-platform.md` already exists and is **ACCEPTED**. #351 added
-`docs/architecture/ADR-001-catalog-and-identity-data-ownership.md`. **Two live ADR-001s.**
+`docs/architecture/ADR-003-catalog-and-identity-data-ownership.md`. **Two live ADR-001s.**
 Decide which keeps the number.
 **Why a human:** a governance decision. #351 filed under the requested name so work was not
 blocked and escalated rather than renumbering unilaterally.
