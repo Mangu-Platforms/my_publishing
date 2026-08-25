@@ -1,0 +1,158 @@
+name: Launch Ops
+
+# ─────────────────────────────────────────────────────────────────────────────
+# One-click launch operations: every remaining console task from
+# HUMAN_TASKS.md as a dispatchable action. The owner's only manual work is
+# setting the secrets once (H0.1-A five + the three Stripe/Supabase names in
+# scripts/launch-ops/README.md), then running this from the Actions UI or:
+#
+#   gh workflow run launch-ops.yml -f action=all-safe -f dry_run=false
+#
+# `all-safe` runs every NON-DESTRUCTIVE action: additive governance
+# (protect-branch, create-label), hardening (supabase-auth-hardening) and
+# read-only audits (vercel-env-audit, legacy-key-check). It deliberately
+# EXCLUDES stripe-webhook-setup, the one action that can affect live checkout
+# (it may replace the production STRIPE_WEBHOOK_SECRET and redeploy) — run
+# that one explicitly. dry_run defaults to TRUE everywhere: mutating scripts
+# report their diff and change nothing until you flip it.
+#
+# Selected steps keep running after an earlier one fails (each is
+# independent), and the final Verdict step fails the job if any failed — one
+# run gives the full ops picture instead of stopping at the first gap.
+# Scripts live in scripts/launch-ops/ and also run locally; see the README
+# there for the full secrets manifest and the list of tasks that stay
+# human-only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Which launch-ops action to run'
+        required: true
+        type: choice
+        default: all-safe
+        options:
+          - all-safe
+          - protect-branch
+          - create-label
+          - stripe-webhook-setup
+          - vercel-env-audit
+          - supabase-auth-hardening
+          - legacy-key-check
+      dry_run:
+        description: 'Dry run — report what would change, change nothing'
+        required: false
+        type: boolean
+        default: true
+      redeploy:
+        description: 'stripe-webhook-setup only — redeploy production after pushing the new signing secret (env changes need a fresh deployment)'
+        required: false
+        type: boolean
+        default: false
+
+# Least privilege: contents:read for checkout, issues:write only because
+# label creation with the default token needs it. Branch protection is NOT
+# grantable here at all (no `administration` permission exists for the
+# GITHUB_TOKEN) — that action uses the GH_PAT_SECRETS PAT instead.
+permissions:
+  contents: read
+  issues: write
+
+# Two overlapping runs could race the read-modify-write scripts.
+concurrency:
+  group: launch-ops
+  cancel-in-progress: false
+
+jobs:
+  ops:
+    name: ${{ inputs.action }} (dry_run=${{ inputs.dry_run }})
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v7
+        id: checkout
+
+      # Each step gets ONLY the secrets it needs; scripts fail loudly, naming
+      # any missing secret. `!cancelled()` keeps later actions running after
+      # an earlier failure; the Verdict step below restores the red X.
+      - name: protect-branch — enforce main branch protection
+        id: protect_branch
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (inputs.action == 'protect-branch' || inputs.action == 'all-safe') }}
+        env:
+          GH_PAT_SECRETS: ${{ secrets.GH_PAT_SECRETS }}
+        run: bash scripts/launch-ops/protect-branch.sh
+
+      - name: create-label — ensure steward-approved exists
+        id: create_label
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (inputs.action == 'create-label' || inputs.action == 'all-safe') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/launch-ops/create-label.sh
+
+      - name: stripe-webhook-setup — webhook + signing secret into Vercel
+        id: stripe_webhook
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && inputs.action == 'stripe-webhook-setup' }}
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_MY_PUBLISHING: ${{ secrets.VERCEL_PROJECT_MY_PUBLISHING }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+          REDEPLOY: ${{ inputs.redeploy }}
+        run: bash scripts/launch-ops/stripe-webhook-setup.sh
+
+      - name: vercel-env-audit — required var names in prod/preview
+        id: vercel_audit
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (inputs.action == 'vercel-env-audit' || inputs.action == 'all-safe') }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_MY_PUBLISHING: ${{ secrets.VERCEL_PROJECT_MY_PUBLISHING }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+        run: bash scripts/launch-ops/vercel-env-audit.sh
+
+      - name: supabase-auth-hardening — leaked-password protection
+        id: supabase_hardening
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (inputs.action == 'supabase-auth-hardening' || inputs.action == 'all-safe') }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: bash scripts/launch-ops/supabase-auth-hardening.sh
+
+      - name: legacy-key-check — old anon key really disabled?
+        id: legacy_key
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (inputs.action == 'legacy-key-check' || inputs.action == 'all-safe') }}
+        env:
+          SUPABASE_LEGACY_ANON_KEY: ${{ secrets.SUPABASE_LEGACY_ANON_KEY }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: bash scripts/launch-ops/legacy-key-check.sh
+
+      - name: Verdict — fail if any selected action failed
+        if: ${{ !cancelled() }}
+        env:
+          OUTCOMES: |
+            protect-branch=${{ steps.protect_branch.outcome }}
+            create-label=${{ steps.create_label.outcome }}
+            stripe-webhook-setup=${{ steps.stripe_webhook.outcome }}
+            vercel-env-audit=${{ steps.vercel_audit.outcome }}
+            supabase-auth-hardening=${{ steps.supabase_hardening.outcome }}
+            legacy-key-check=${{ steps.legacy_key.outcome }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          failed=0
+          {
+            echo "### Launch Ops verdict (action=${{ inputs.action }}, dry_run=${DRY_RUN})"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS='=' read -r name outcome; do
+            [ -z "$name" ] && continue
+            echo "- ${name}: ${outcome}" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$outcome" = "failure" ]; then failed=1; fi
+          done <<< "$OUTCOMES"
+          if [ "$failed" -eq 1 ]; then
+            echo "::error::At least one launch-ops action failed — see the steps above."
+            exit 1
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run — nothing was changed. Re-run with dry_run=false to apply." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
