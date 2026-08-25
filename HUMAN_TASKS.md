@@ -473,9 +473,16 @@ table unconditionally even in Mongo mode. **Not a double-charge risk today** —
 order creation (`upsertOrderByPaymentIntent`) is already correctly dual-run with its own
 unique-index protection on `stripe_payment_intent_id`. This is the separate event-log
 bookkeeping layer on top; after Supabase teardown (Phase 13-15) it would 500 on every
-webhook delivery instead of returning 200, causing Stripe retry storms. A worktree-isolated
-background agent is adding the Mongo leg (mirroring the existing `upsertOrderByPaymentIntent`
-pattern in `lib/mongo-queries.ts` + a new unique index in `scripts/mongo-ensure-indexes.ts`)
-scoped tightly to just those three functions — nothing else in the webhook route touched.
-Will open its own draft PR; check for it if this note is still here without a completion
-follow-up.
+webhook delivery instead of returning 200, causing Stripe retry storms.
+
+**Done — [PR #408](https://github.com/Mangu-Platforms/my_publishing/pull/408).** Reviewed
+the full diff (not just the summary), same as #406: `app/api/webhook/route.ts`'s change is
+exactly an import line plus 4 minimal `if (isMongoPrimary())` branches at the named call
+sites — every `else` branch is the original line(s) verbatim (signature verification, the
+event-type switch, all 4 `handle*` functions, and the 500-vs-200 logic untouched). New
+Mongo functions in `lib/mongo-queries.ts` mirror the existing `upsertOrderByPaymentIntent`
+style. The new test (`tests/unit/webhook-event-log-dual-run.test.ts`) delivers the same
+Stripe event twice in Mongo mode and directly asserts the mocked Supabase client's `.from()`
+is never called — strong proof of provider isolation, not just a claim. Index added to
+`scripts/mongo-ensure-indexes.ts` but not run (no Atlas credentials in this sandbox — same
+H-P5.4 human gate as always). Opened as **draft**, no self-approval, no label.
