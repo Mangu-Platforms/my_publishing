@@ -50,7 +50,11 @@ describe('no stale 6-character policy survives anywhere', () => {
     'app/(auth)/login/actions.ts',
     'app/(auth)/register/RegisterForm.tsx',
     'app/(auth)/register/actions.ts',
-    'app/(auth)/reset-password/confirm/page.tsx',
+    // REPO_AUDIT_2026-08-21 F2: the reset-confirm form logic (Supabase leg
+    // unchanged, Better Auth leg new) now lives in these two files, not
+    // page.tsx — page.tsx is just the server-side provider switch.
+    'app/(auth)/reset-password/confirm/SupabaseResetPasswordConfirmForm.tsx',
+    'app/(auth)/reset-password/confirm/BetterAuthResetPasswordConfirmForm.tsx',
     'lib/utils/validation.ts',
     'tests/e2e/auth-flow.spec.ts',
   ];
@@ -68,9 +72,14 @@ describe('password creation surfaces enforce the policy; sign-in does not', () =
     expect(src).toContain('password.length < PASSWORD_MIN_LENGTH');
   });
 
-  it('register form and reset-confirm show the help text', () => {
+  it('register form and both reset-confirm dual-run legs show the help text', () => {
     expect(read('app/(auth)/register/RegisterForm.tsx')).toContain('PASSWORD_HELP_TEXT');
-    expect(read('app/(auth)/reset-password/confirm/page.tsx')).toContain('PASSWORD_HELP_TEXT');
+    expect(
+      read('app/(auth)/reset-password/confirm/SupabaseResetPasswordConfirmForm.tsx')
+    ).toContain('PASSWORD_HELP_TEXT');
+    expect(
+      read('app/(auth)/reset-password/confirm/BetterAuthResetPasswordConfirmForm.tsx')
+    ).toContain('PASSWORD_HELP_TEXT');
   });
 
   it('sign-in only requires presence, so existing shorter credentials still work', () => {

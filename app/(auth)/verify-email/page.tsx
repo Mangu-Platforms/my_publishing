@@ -5,6 +5,8 @@ import { Suspense } from 'react';
 import { Container } from '@/components/layout/Container';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { betterAuthGetSessionUser } from '@/lib/auth/better-auth-actions';
+import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { createClient } from '@/lib/supabase/server';
 import { ResendVerificationForm } from './ResendVerificationForm';
 
@@ -16,12 +18,33 @@ export const metadata: Metadata = {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function checkVerificationStatus(requestedEmail?: string) {
+  const normalizedRequestedEmail = requestedEmail?.trim().toLowerCase();
+
+  // REPO_AUDIT_2026-08-21 F2 / Phoenix WS1 tail: Better Auth leg, additive —
+  // the Supabase branch below is untouched.
+  if (isBetterAuthPrimary()) {
+    const sessionUser = await betterAuthGetSessionUser();
+    const email =
+      normalizedRequestedEmail && EMAIL_PATTERN.test(normalizedRequestedEmail)
+        ? normalizedRequestedEmail
+        : sessionUser?.email?.trim().toLowerCase();
+
+    if (!email) {
+      redirect('/login?error=' + encodeURIComponent('Please sign in to verify your email.'));
+    }
+
+    return {
+      email,
+      emailConfirmed:
+        sessionUser?.email?.trim().toLowerCase() === email && sessionUser.emailVerified === true,
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const normalizedRequestedEmail = requestedEmail?.trim().toLowerCase();
   const email =
     normalizedRequestedEmail && EMAIL_PATTERN.test(normalizedRequestedEmail)
       ? normalizedRequestedEmail

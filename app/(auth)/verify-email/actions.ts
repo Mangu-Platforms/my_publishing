@@ -1,6 +1,8 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { betterAuthSendVerificationEmail } from '@/lib/auth/better-auth-actions';
+import { isBetterAuthPrimary } from '@/lib/auth/provider';
 import { createClient } from '@/lib/supabase/server';
 import {
   authRateLimit,
@@ -74,6 +76,18 @@ export async function resendVerificationEmail(email: string) {
   // Per-email rate limiting
   if (!(await emailVerificationRateLimit(normalizedEmail))) {
     return { error: 'Too many verification email requests. Please try again in an hour.' };
+  }
+
+  // REPO_AUDIT_2026-08-21 F2 / Phoenix WS1 tail: Better Auth leg. Its own
+  // /send-verification-email endpoint already handles "already verified" and
+  // "no such user" by silently no-oping (constant-time, no enumeration leak),
+  // so we don't duplicate that check here the way the Supabase leg below does.
+  if (isBetterAuthPrimary()) {
+    const ba = await betterAuthSendVerificationEmail(normalizedEmail);
+    if (ba.error) {
+      return { error: toFriendlyResendError(ba.error) };
+    }
+    return { success: true };
   }
 
   try {
