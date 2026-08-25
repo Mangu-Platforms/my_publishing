@@ -401,6 +401,11 @@ Full write-up: `docs/MANGU_PUBLISHERS_END_TO_END.md` §19 (2026-08-25 delta).
   in the commit log for `HUMAN_TASKS.md` on `claude/mangu-publishers-sprint-b840d5` if you
   want to see it. No data was lost; flagging it for transparency, not because it needs any
   action from you.
+- **A0.1 impact upgraded:** `claude-pr-review.yml` wasn't actually "inert" as its own header
+  comment claimed while `ANTHROPIC_API_KEY` is unset — it ran unconditionally and errored,
+  so every open PR carried a permanently-red (non-required, comment-only) "review" check.
+  Fixed the workflow itself (job now genuinely skips) on PR #405 — but A0.1 (setting the
+  actual secret) is still what turns the reviewer on; this only stopped the noise.
 
 ### PR/issue queue triage (2026-08-25) — result: **nothing was obsolete**
 
