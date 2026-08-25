@@ -1,0 +1,51 @@
+# Claude auto-review — every PR gets a repo-aware readiness review on open (and
+# again when marked ready), so the required human approval takes under a minute.
+# This is the review half of the PR-movement pipeline (docs/AGENTIC_FOUNDRY.md §2).
+#
+# Inert until the ANTHROPIC_API_KEY repo secret exists (HUMAN_TASKS A0.1).
+# Skips bot-authored PRs (dependabot bumps don't need a prose review).
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+jobs:
+  review:
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Claude readiness review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}
+            as this repo's readiness reviewer. Read .claude/skills/steward/SKILL.md and
+            CLAUDE.md first — the launch freeze (#209) and Phoenix contract govern.
+
+            Produce ONE review comment on the PR (use `gh pr comment`) with:
+            1. Verdict line: READY TO APPROVE / NEEDS CHANGES / OWNER DECISION NEEDED.
+            2. Freeze class: which NEXT_GO permitted class this lands under (or that
+               it violates the freeze and belongs in docs/ENHANCEMENT_LEDGER.md).
+            3. Guardrail check: does the diff touch middleware.ts, lib/rate-limit.ts,
+               app/api/webhook/route.ts, lib/*/provider.ts, env validation, or .env
+               examples — and does the body justify it? Flag any provider-default flip
+               as a blocker.
+            4. Correctness: the 2–5 riskiest hunks, checked, with file:line refs.
+            5. Phoenix PRs: Task IDs present in the body + verification evidence pasted?
+            6. Anything that would drop the 740/740 unit baseline or break `ci`.
+            Be concrete and short — the owner reads this to decide in one minute.
+            Do not approve, request changes, or merge; comment only.
+          claude_args: '--max-turns 30 --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"'

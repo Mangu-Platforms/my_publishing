@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { Container } from '@/components/layout/Container';
@@ -69,7 +70,7 @@ export default async function VerifyEmailPage({
 
           <div className="pt-4">
             <Button variant="outline" className="w-full" asChild>
-              <a href="/">Go to Homepage</a>
+              <Link href="/">Go to Homepage</Link>
             </Button>
           </div>
         </CardContent>
