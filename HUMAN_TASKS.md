@@ -98,7 +98,7 @@ Set these five GitHub Secrets at
 `github.com/redinc23/my_publishing/settings/secrets/actions`:
 
 | Secret                         | Where to get it                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------ |
+| ------------------------------ | ---------------------------------------------------------------------- |
 | `VERCEL_TOKEN`                 | vercel.com/account/tokens → Create                                     |
 | `GH_PAT_SECRETS`               | github.com/settings/tokens → Fine-grained → secrets:write on this repo |
 | `VERCEL_PROJECT_MY_PUBLISHING` | Vercel → my_publishing → Settings → General → Project ID               |
@@ -272,7 +272,7 @@ Click-paths reference `docs/PROJECT_PHOENIX.md` unless noted.
 ## Phase 1 — prep (from Phoenix §5)
 
 | ID   | Task                                                        | Status |
-| ---- | ------------------------------------------------------------ | ------ |
+| ---- | ----------------------------------------------------------- | ------ |
 | P1.4 | Create MongoDB Atlas API key                                | ⬜     |
 | P1.5 | Create Vercel token (env sync)                              | ⬜     |
 | P1.7 | Feature-freeze communications to stakeholders               | ⬜     |
@@ -297,7 +297,7 @@ Click-paths reference `docs/PROJECT_PHOENIX.md` unless noted.
 > **Do not begin until P1.8 (restore-tested `pg_dump` + storage snapshot) is done.**
 
 | ID    | Task                                                                    | Command                                            | Status |
-| ----- | ------------------------------------------------------------------------ | --------------------------------------------------- | ------ |
+| ----- | ----------------------------------------------------------------------- | -------------------------------------------------- | ------ |
 | P11.1 | Export from Supabase (needs `SUPABASE_DB_URL`)                          | `npm run phoenix:export`                           | ⬜     |
 | P11.2 | Transform (agent-verified; gate = zero unmapped FKs)                    | `npm run phoenix:transform`                        | ⬜     |
 | P11.3 | **Dry run into a staging Atlas db + preview smoke 6/6 — do not skip**   | see runbook §3                                     | ⬜     |
@@ -326,7 +326,7 @@ optional cleanup — it is how the userbase regains access.
 ## Phase 13–15 — cutover / teardown
 
 | ID  | Task                                                                         | Status |
-| --- | ------------------------------------------------------------------------------ | ------ |
+| --- | ---------------------------------------------------------------------------- | ------ |
 | P13 | Cloudflare DNS → Vercel; Cloud Run standby 48h                               | ⬜     |
 | P14 | Prod QA matrix, mongodump to cloud storage, token revocation, Supabase pause | ⬜     |
 | P15 | Post-mortem                                                                  | ⬜     |
@@ -334,7 +334,7 @@ optional cleanup — it is how the userbase regains access.
 ## Doc decisions needed from humans (recon §10)
 
 | ID  | Decision                                                                                                        | Status |
-| --- | ------------------------------------------------------------------------------------------------------------------ | ------ |
+| --- | --------------------------------------------------------------------------------------------------------------- | ------ |
 | D8  | Confirm manuscripts stay non-public (proxy-only) even if Blob `put` uses path obscurity                         | ⬜     |
 | D12 | Confirm feature freeze: resonance/MCP/social-beyond-reviews/payouts deferred post-Phoenix unless listed in §1.4 | ⬜     |
 
@@ -379,7 +379,7 @@ Full write-up: `docs/MANGU_PUBLISHERS_END_TO_END.md` §19 (2026-08-25 delta).
   in the delta §19.6. `auth_leaked_password_protection` WARN still open (existing H1.4,
   unchanged, dashboard-only fix).
 - **InDesign/production binaries confirmed still in git**: `Kimi_Agent_Book prep for
-  InDesign.zip` (~4 MB), `We_Are_Wolf_InDesign_Production_Guide.docx`(+`.pdf`). Not moved
+InDesign.zip` (~4 MB), `We_Are_Wolf_InDesign_Production_Guide.docx`(+`.pdf`). Not moved
   or touched — see delta §19.6 Q1 for the rights/storage question.
 - Host-canonical question re-litigated by an incoming brief was **not reopened** — ADR-001
   (Vercel, accepted 2026-07-18) stands; see delta §19.2 for why.
@@ -417,15 +417,15 @@ open is either legitimate in-flight work or a correctly-still-open launch gate; 
 tonight, all mechanical/non-merge actions within an agent's authority (branch protection
 still requires your review + the `steward-approved` label for every one of these):
 
-| Action | Scope | Result |
-| --- | --- | --- |
-| Update branch (merge `main` in) | #384–#393 (10 dependabot), #396–#401 (6 Phoenix/hardening) | All 16 were `mergeable_state: behind`, zero textual conflicts on any (confirmed file-disjoint from what merged since). Update requested on each; CI re-running on the new heads. |
-| Draft → ready for review | #396, #397, #398, #399, #400, #401 | All 6 were complete, CI-green, evidence-complete — just never flipped out of draft. Now visible in your normal review queue. |
-| Left untouched | #395 | Has its own embedded owner lane-call (JSON-LD scope, leaning L2) — still needs your explicit approve-or-revert-one-commit decision before anything else happens to it. |
-| Left untouched | #382 | Deliberately post-launch/do-not-merge (A6 HARDEN) — correct, confirmed again tonight. |
-| Status comments posted (new merged evidence, no gate flips) | Issues #187, #192, #195, #198, #199, #205, #209 | Each issue's thread now reflects what's actually merged since its last (mostly 2026-07-19) comment. None closed — all still genuinely blocked on operator evidence (CCR-014). |
-| New finding surfaced | Issue #194 | **No E2E/Playwright CI job exists anywhere in `.github/workflows/` right now** — `preview-e2e.yml` is gone (likely an unintended casualty of the 2026-08-14 "19 workflows → 3" consolidation). Commented on the issue; needs an owner call: restore the workflow, or formally re-scope the issue and correct `NEXT_GO.md`. |
-| Left untouched, no comment (agent judged no new evidence) | Issues #191, #193, #203 | Correctly still blocked on operator action; nothing new to report. |
+| Action                                                      | Scope                                                      | Result                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Update branch (merge `main` in)                             | #384–#393 (10 dependabot), #396–#401 (6 Phoenix/hardening) | All 16 were `mergeable_state: behind`, zero textual conflicts on any (confirmed file-disjoint from what merged since). Update requested on each; CI re-running on the new heads.                                                                                                                                           |
+| Draft → ready for review                                    | #396, #397, #398, #399, #400, #401                         | All 6 were complete, CI-green, evidence-complete — just never flipped out of draft. Now visible in your normal review queue.                                                                                                                                                                                               |
+| Left untouched                                              | #395                                                       | Has its own embedded owner lane-call (JSON-LD scope, leaning L2) — still needs your explicit approve-or-revert-one-commit decision before anything else happens to it.                                                                                                                                                     |
+| Left untouched                                              | #382                                                       | Deliberately post-launch/do-not-merge (A6 HARDEN) — correct, confirmed again tonight.                                                                                                                                                                                                                                      |
+| Status comments posted (new merged evidence, no gate flips) | Issues #187, #192, #195, #198, #199, #205, #209            | Each issue's thread now reflects what's actually merged since its last (mostly 2026-07-19) comment. None closed — all still genuinely blocked on operator evidence (CCR-014).                                                                                                                                              |
+| New finding surfaced                                        | Issue #194                                                 | **No E2E/Playwright CI job exists anywhere in `.github/workflows/` right now** — `preview-e2e.yml` is gone (likely an unintended casualty of the 2026-08-14 "19 workflows → 3" consolidation). Commented on the issue; needs an owner call: restore the workflow, or formally re-scope the issue and correct `NEXT_GO.md`. |
+| Left untouched, no comment (agent judged no new evidence)   | Issues #191, #193, #203                                    | Correctly still blocked on operator action; nothing new to report.                                                                                                                                                                                                                                                         |
 
 **One highest-leverage action for you tonight/tomorrow, unchanged from the 2026-08-21
 audit and reconfirmed:** the single approving review + `steward-approved` label on
@@ -433,11 +433,34 @@ audit and reconfirmed:** the single approving review + `steward-approved` label 
 implicitly references), then #396–#401 in any order — all are green and now
 out of draft.
 
-### WS1 auth-tail dual-run (in progress as of this writing)
+### WS1 auth-tail dual-run — done, draft PR #406 open
 
-A background agent is implementing the Better Auth legs for `reset-password/confirm`,
-`verify-email`, and the OAuth `callback` route (2026-08-21 audit finding F2 — the highest-
-value remaining Phoenix WS1 gap; without it, forced-reset cutover can't actually complete
-for any legacy user). Working on branch `feat/phoenix-ws1-auth-tail-dual-run`; will open its
-own draft PR when done. Check for that PR if you don't see a note here saying it finished
-or hit a genuine blocker.
+[**PR #406**](https://github.com/Mangu-Platforms/my_publishing/pull/406) implements the
+Better Auth legs for `reset-password/confirm` and `verify-email` (2026-08-21 audit finding
+F2 — the highest-value remaining Phoenix WS1 gap; without it, forced-reset cutover can't
+actually complete for any legacy user). Reviewed the actual diff, not just the summary:
+
+- `reset-password/confirm/page.tsx` is now a server component that calls
+  `isBetterAuthPrimary()` and renders one of two client components — the Supabase logic
+  moved out **verbatim** (`SupabaseResetPasswordConfirmForm.tsx`, byte-identical behavior)
+  alongside a new `BetterAuthResetPasswordConfirmForm.tsx`. The link mechanics were traced
+  from Better Auth's actual source in `node_modules` rather than assumed (its own
+  `GET /api/auth/reset-password/:token` endpoint already handles the token, redirecting
+  here with `?token=`/`?error=` — no new route needed).
+- `verify-email/actions.ts` + `page.tsx` gained additive Better Auth branches; two new
+  helpers in `lib/auth/better-auth-actions.ts` follow the file's existing pattern exactly.
+- **Deliberately not touched, with reasoning:** `callback/route.ts` (confirmed via
+  repo-wide grep there's no OAuth/social login on either provider — nothing for it to do),
+  `middleware.ts` (verified no change needed), `components/providers/auth-provider.tsx`
+  (scoped — only 2 consumers, one of which is dead code — but explicitly handed over rather
+  than improvised, since there's no existing pattern in the repo to mirror for it).
+- `AUTH_PROVIDER` default untouched everywhere; no guardrail files (middleware, rate-limit,
+  webhook, provider switches, env validation) modified.
+- Verified: `type-check` clean, `lint` clean, `test` 760/761 (was 740/740 — the 1 failure is
+  pre-existing and unrelated, confirmed via `git stash` against unmodified `main`),
+  `validate:gap-ledger` passed. `build`/`validate-env` fail in this sandbox only (no
+  `.env.local` at all here) — confirmed pre-existing the same way, not this PR's doing.
+
+Opened as **draft**, no self-approval, no label applied — same human-gated queue as the
+rest. One real open question handed to you rather than guessed at: whether/when to scope
+the `auth-provider.tsx` client-context gap as its own follow-up (noted in the PR body).
