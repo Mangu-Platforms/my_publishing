@@ -12,16 +12,17 @@ Humans own consoles, credentials, DNS, and go/no-go decisions (`HUMAN_TASKS.md`)
 
 ### Tier A — Always load for platform work
 
-| Skill            | Path                                                 | Use when                                            |
-| ---------------- | ---------------------------------------------------- | --------------------------------------------------- |
-| **MANGU Navigator** | [`mangu-navigator/`](./mangu-navigator/)          | **Load first every session.** Orchestration, dual ledgers (NEXT_GO + Phoenix), next-best-action, enhancement engine, task routing |
-| Phoenix Contract | [`phoenix-contract/`](./phoenix-contract/)           | Task IDs, PR order, feature freeze, doc amendments  |
-| Ops Runbook      | [`mangu-ops-runbook/`](./mangu-ops-runbook/)         | Incidents, health, rollback triage                  |
-| Env & Secrets    | [`mangu-env-and-secrets/`](./mangu-env-and-secrets/) | Env vars, validate-env, human gates for secrets     |
-| Better Auth      | [`better-auth-mangu/`](./better-auth-mangu/)         | Sessions, forced reset, RBAC role field, middleware |
-| MongoDB Atlas    | [`mongodb-atlas-mangu/`](./mongodb-atlas-mangu/)     | `getDb`, indexes, queries, migration verify         |
-| Stripe Webhook   | [`stripe-webhook-mangu/`](./stripe-webhook-mangu/)   | Checkout, idempotent orders                         |
-| MCP Catalog Ops  | [`mcp-catalog-ops/`](./mcp-catalog-ops/)             | In-app MCP tools at `/api/mcp`                      |
+| Skill               | Path                                                 | Use when                                                                                                                          |
+| ------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **MANGU Navigator** | [`mangu-navigator/`](./mangu-navigator/)             | **Load first every session.** Orchestration, dual ledgers (NEXT_GO + Phoenix), next-best-action, enhancement engine, task routing |
+| Phoenix Contract    | [`phoenix-contract/`](./phoenix-contract/)           | Task IDs, PR order, feature freeze, doc amendments                                                                                |
+| PR Steward          | [`steward/`](./steward/)                             | Driving/babysitting any PR here (auto-read by PR-watching sessions); merge conventions, CI-failure discipline                     |
+| Ops Runbook         | [`mangu-ops-runbook/`](./mangu-ops-runbook/)         | Incidents, health, rollback triage                                                                                                |
+| Env & Secrets       | [`mangu-env-and-secrets/`](./mangu-env-and-secrets/) | Env vars, validate-env, human gates for secrets                                                                                   |
+| Better Auth         | [`better-auth-mangu/`](./better-auth-mangu/)         | Sessions, forced reset, RBAC role field, middleware                                                                               |
+| MongoDB Atlas       | [`mongodb-atlas-mangu/`](./mongodb-atlas-mangu/)     | `getDb`, indexes, queries, migration verify                                                                                       |
+| Stripe Webhook      | [`stripe-webhook-mangu/`](./stripe-webhook-mangu/)   | Checkout, idempotent orders                                                                                                       |
+| MCP Catalog Ops     | [`mcp-catalog-ops/`](./mcp-catalog-ops/)             | In-app MCP tools at `/api/mcp`                                                                                                    |
 
 ### Tier B — Migration window (Phases 11–15)
 

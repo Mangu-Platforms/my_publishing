@@ -1,7 +1,11 @@
 import { MetadataRoute } from 'next';
+import { getSiteUrl } from '@/lib/seo/siteUrl';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  // getSiteUrl adds a VERCEL_URL fallback and trims trailing slashes, matching
+  // sitemap.ts, layout.tsx, and the JSON-LD helpers. Sitemap and robots.host
+  // must never disagree with each other or with the canonical URLs pages emit.
+  const baseUrl = getSiteUrl();
 
   return {
     rules: [
