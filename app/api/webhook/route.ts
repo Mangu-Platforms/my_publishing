@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { randomUUID } from 'crypto';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import { enforceRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { getStripe } from '@/lib/stripe/server';
@@ -172,43 +173,19 @@ async function handleCheckoutCompleted(
   const existingOrder = existingOrders?.[0];
 
   if (existingOrder) {
+    // Fulfillment already happened for this payment; creating order items here
+    // would mint a second license for the same purchase, so skip and ack.
     console.log('[Webhook] Order already exists for session:', session.id);
-    const { data: existingItems } = await supabase
-      .from('order_items')
-      .select('id')
-      .eq('order_id', existingOrder.id)
-      .eq('book_id', metadata.book_id)
-      .limit(1);
-
-    if (!existingItems?.length) {
-      const { error: itemError } = await supabase.from('order_items').insert({
-        order_id: existingOrder.id,
-        book_id: metadata.book_id,
-        unit_price: session.amount_total ? session.amount_total / 100 : 0,
-        license_key: `LIC-${Date.now()}-${metadata.book_id}`,
-      });
-
-      if (itemError) {
-        console.error('[Webhook] Failed to repair missing order item:', itemError);
-        return {
-          success: false,
-          error: `Failed to repair missing order item: ${itemError.message}`,
-          event_id: session.id,
-          event_type: 'checkout.session.completed',
-          should_retry: true,
-        };
-      }
-    }
-
     return {
       success: true,
       event_id: session.id,
       event_type: 'checkout.session.completed',
-      action_taken: 'Order already exists, ensured order item exists',
+      action_taken: 'Order already exists, skipped duplicate fulfillment',
     };
   }
 
-  // Create the order
+  // Create the order. With the partial unique index on orders(payment_intent_id)
+  // (20260814090000) this insert is the atomic idempotency claim for fulfillment.
   const totalAmount = session.amount_total ? session.amount_total / 100 : 0;
   const { data: order, error: orderError } = await supabase
     .from('orders')
@@ -221,6 +198,21 @@ async function handleCheckoutCompleted(
     })
     .select('id')
     .single();
+
+  // Unique violation: a concurrent delivery won the race between our SELECT
+  // above and this insert (keyed on payment_intent_id, or order_number for
+  // PI-less sessions). The order is fulfilled — ack instead of double-creating.
+  // supabase-js upsert() can't target a partial unique index (PostgREST cannot
+  // express the index predicate), so insert-then-23505 is the upsert here.
+  if (orderError?.code === '23505') {
+    console.log('[Webhook] Order already created by a concurrent delivery:', session.id);
+    return {
+      success: true,
+      event_id: session.id,
+      event_type: 'checkout.session.completed',
+      action_taken: 'Order already exists, skipped duplicate fulfillment',
+    };
+  }
 
   if (orderError || !order) {
     console.error('[Webhook] Failed to create order:', orderError);
@@ -237,7 +229,8 @@ async function handleCheckoutCompleted(
     order_id: order.id,
     book_id: metadata.book_id,
     unit_price: totalAmount,
-    license_key: `LIC-${Date.now()}-${metadata.book_id}`,
+    // Crypto-random: timestamp-based keys were guessable and could collide.
+    license_key: `LIC-${randomUUID()}`,
   });
 
   if (itemError) {

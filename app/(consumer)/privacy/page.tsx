@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 
@@ -45,9 +46,9 @@ export default function PrivacyPage() {
               <p>
                 We use essential cookies to keep you signed in. We do not use analytics or
                 advertising cookies. See our{' '}
-                <a href="/cookies" className="text-primary hover:underline">
+                <Link href="/cookies" className="text-primary hover:underline">
                   cookies page
-                </a>{' '}
+                </Link>{' '}
                 for details.
               </p>
             </section>
@@ -73,9 +74,9 @@ export default function PrivacyPage() {
               <h2 className="mb-2 text-2xl font-semibold text-foreground">Contact</h2>
               <p>
                 Privacy questions? Reach out via our{' '}
-                <a href="/contact" className="text-primary hover:underline">
+                <Link href="/contact" className="text-primary hover:underline">
                   contact page
-                </a>
+                </Link>
                 .
               </p>
             </section>
