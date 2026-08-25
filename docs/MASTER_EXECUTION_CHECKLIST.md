@@ -1,3 +1,12 @@
+> # ⛔ SUPERSEDED (2026-08-14) — DO NOT EXECUTE
+>
+> This checklist (v2.0, Cloud Run era) is superseded; do **not** execute missions from it.
+> **The only live launch authorities are [`docs/NEXT_GO.md`](./NEXT_GO.md) and
+> [`docs/launch/PROGRAMME_END_TO_END.md`](./launch/PROGRAMME_END_TO_END.md).** Where this file
+> conflicts with them, they win. This file is retained as history only and is no longer maintained.
+
+---
+
 # **MANGU PUBLISHERS — MASTER EXECUTION CHECKLIST v2.0**
 
 ### **Unified Go-Live · Revamp · Fixes · Feature Build-Out · Operations**
