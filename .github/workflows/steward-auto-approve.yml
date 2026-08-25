@@ -1,0 +1,70 @@
+# Steward auto-approve — the owner's dial for fully agent-driven PR movement.
+#
+# Chain: human applies `steward-approved` label (the ONE human act)
+#   → this workflow submits the approving review branch protection requires
+#   → merge-steward.yml arms squash auto-merge
+#   → GitHub merges when `ci` is green.
+#
+# Fenced three ways:
+#   1. Inert until the owner sets repo variable STEWARD_AUTO_APPROVE=true
+#      (Settings → Secrets and variables → Actions → Variables).
+#   2. Only acts on PRs carrying the human-applied `steward-approved` label.
+#   3. Same-repo branches only (never forks), and never checks out PR code —
+#      safe under pull_request_target.
+#
+# dismiss_stale_reviews is on, so a push after labeling dismisses the bot
+# approval; the hourly sweep re-approves only if the label is still present
+# and CI is green on the new head.
+name: Steward Auto-Approve
+
+on:
+  pull_request_target:
+    types: [labeled]
+  schedule:
+    - cron: '37 * * * *' # hourly sweep: re-approve labeled PRs whose approval was dismissed
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  checks: read
+  contents: read
+
+jobs:
+  approve:
+    if: vars.STEWARD_AUTO_APPROVE == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Approve labeled, green, same-repo PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number || '' }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request_target" ]; then
+            prs="$EVENT_PR"
+          else
+            prs=$(gh pr list --repo "$REPO" --label steward-approved --state open \
+              --json number --jq '.[].number')
+          fi
+          for pr in $prs; do
+            data=$(gh pr view "$pr" --repo "$REPO" \
+              --json isCrossRepository,isDraft,labels,reviews,headRefOid,statusCheckRollup)
+            echo "$data" | jq -e '.isCrossRepository or .isDraft' >/dev/null && \
+              { echo "PR #$pr: fork or draft — skip"; continue; }
+            echo "$data" | jq -e '.labels[] | select(.name == "steward-approved")' >/dev/null || \
+              { echo "PR #$pr: label missing — skip"; continue; }
+            echo "$data" | jq -e \
+              '[.statusCheckRollup[]? | select(.name == "ci")] | length > 0 and all(.[]; .conclusion == "SUCCESS")' \
+              >/dev/null || { echo "PR #$pr: ci not green — skip"; continue; }
+            head=$(echo "$data" | jq -r '.headRefOid')
+            # dismiss_stale_reviews is enabled on main, so any review still in
+            # APPROVED state necessarily targets the current head.
+            echo "$data" | jq -e \
+              '[.reviews[]? | select(.state == "APPROVED")] | length > 0' \
+              >/dev/null && { echo "PR #$pr: already approved — skip"; continue; }
+            gh pr review "$pr" --repo "$REPO" --approve --body \
+              "Auto-approval per owner-enabled \`STEWARD_AUTO_APPROVE\` on the human-applied \`steward-approved\` label (head \`$head\`, \`ci\` green). Remove the label and run \`gh pr merge $pr --disable-auto\` to halt."
+            echo "PR #$pr: approved at $head"
+          done

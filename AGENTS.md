@@ -2,17 +2,28 @@
 
 Primary project instructions for GitHub Copilot CLI (and compatible agents). Cursor simulation rules live in [`cursorrules`](cursorrules). Custom agent profiles live in [`.github/agents/`](.github/agents/). Full product docs: [`docs/MANGU_PUBLISHERS_END_TO_END.md`](docs/MANGU_PUBLISHERS_END_TO_END.md). Copilot CLI operator guide: [`docs/COPILOT_CLI.md`](docs/COPILOT_CLI.md).
 
+> **Start here, every session:** read the top of [`CLAUDE.md`](CLAUDE.md), then load
+> `.claude/skills/mangu-navigator/SKILL.md` (mental model, authority chain, next-best-action)
+> and run `bash .claude/skills/mangu-navigator/scripts/state-sync.sh` for ground truth.
+> If you drive a PR, also read `.claude/skills/steward/SKILL.md`. The agent-fleet
+> architecture and activation runbook live in [`docs/AGENTIC_FOUNDRY.md`](docs/AGENTIC_FOUNDRY.md).
+
 ## Project
 
-MANGU Publishers is a Netflix-inspired digital publishing platform: book marketplace, reading progress, author/partner portals, Stripe checkout, Supabase auth, admin dashboard, and analytics.
+MANGU Publishers is a Netflix-inspired digital publishing platform: book marketplace, reading progress, author/partner portals, Stripe checkout, admin dashboard, and analytics.
 
 ## Stack and canonical paths
 
 - **Framework:** Next.js 14 App Router, React 18, TypeScript (strict), Tailwind CSS
-- **Backend:** Supabase (PostgreSQL, Auth, Storage, pgvector)
+- **Backend (dual-run, Project Phoenix ACTIVE):** Supabase (Postgres+RLS, Auth, Storage) is
+  **live in production**; Better Auth + MongoDB Atlas + Vercel Blob are merging in behind
+  provider switches (`AUTH_PROVIDER` / `DATABASE_PROVIDER` / `STORAGE_PROVIDER`, all
+  defaulting `supabase`). Never flip a default; contract: `docs/PROJECT_PHOENIX.md`.
 - **Payments:** Stripe
 - **AI (product):** OpenAI embeddings for Resonance; heuristic AI insights elsewhere
-- **Production path:** Google Cloud Build → Cloud Run (`cloudbuild.yaml`). Vercel/Amplify configs are secondary.
+- **Production path:** **Vercel** (ADR-001 Option B, ACCEPTED 2026-07-18; project
+  `manguprojectz`). The GCP Cloud Build → Cloud Run path (`cloudbuild.yaml`) is **legacy
+  standby only** — do not deploy or "fix" it unless explicitly asked.
 
 | Path                   | Role                                        |
 | ---------------------- | ------------------------------------------- |
@@ -30,7 +41,9 @@ MANGU Publishers is a Netflix-inspired digital publishing platform: book marketp
 - TypeScript strict; do not weaken types to “make it compile.”
 - Never commit secrets, tokens, or real `.env` values. Use placeholders in examples.
 - Do not invent migrations out of order; respect `supabase/migrations/` naming and apply order.
-- Cloud Run via `cloudbuild.yaml` is the canonical production path—do not treat Vercel/Amplify as primary without an explicit request.
+- Vercel is the canonical production path (ADR-001). Do not treat Cloud Run or Amplify as primary.
+- Launch freeze (issue #209) is active: only migration parity, hardening, and NEXT_GO §8
+  permitted classes may merge. New product surface goes to `docs/ENHANCEMENT_LEDGER.md` instead.
 - Avoid drive-by refactors unrelated to the asked task.
 - Confirm before destructive shell (`rm`, mass `sed`, `chmod`, force-push) unless the user explicitly allows all tools (`--yolo` / `--allow-all` / equivalent).
 
@@ -81,7 +94,8 @@ Before any work:
 **Prompts for continuous cowork:** `.cursor/automations/*.prompt.md`
 **Cowork branch convention:** `cursor/<slug>-c5d8`. One PR per run.
 
-> **Integration note:** PR #281 records "Default path: Phoenix (B)". Main's newer record
-> (`CLAUDE.md` header "PROJECT PHOENIX (PAUSED)"; `HUMAN_TASKS.md` recovery log, commit
-> `841a57e`, 2026-07-19 04:40 UTC) marks Phoenix paused until explicit owner reactivation.
-> The paused record governs unless the owner reactivates.
+> **Integration note (superseded record corrected 2026-08-21):** Project Phoenix is
+> **ACTIVE** — owner Faith Beckwith reactivated it 2026-07-20 (`CLAUDE.md` header
+> "PROJECT PHOENIX (ACTIVE)"; `HUMAN_TASKS.md` C0.3 "LOCKED to Phoenix (B)"). The earlier
+> "paused" record above this note is history, not guidance. Default path: Phoenix (B),
+> one PR per run, production stays `AUTH_PROVIDER=supabase` until Phase 11–12 cutover.
