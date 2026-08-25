@@ -1,6 +1,6 @@
 # Data Ownership Matrix
 
-> **Companion to** `docs/architecture/ADR-001-catalog-and-identity-data-ownership.md`.
+> **Companion to** `docs/architecture/ADR-003-catalog-and-identity-data-ownership.md`.
 > **Subordinate to** `docs/NEXT_GO.md` (CCR-001).
 > Every read/write path below was verified by opening the file in the repository at
 > `audit/2026-07-28-fixes` @ `8e6fa50`. Line numbers are from that commit.
