@@ -8,6 +8,10 @@ export function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not set');
     }
     stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      // 2026-08-14 (F-10): apiVersion pins a 2023 release. Deliberately NOT
+      // bumped in this hardening pass — upgrading changes API/webhook response
+      // shapes at runtime. Schedule a dedicated upgrade window: bump the pin,
+      // regenerate types, and retest checkout + webhook flows together.
       apiVersion: '2023-10-16',
     });
   }
@@ -29,6 +33,13 @@ interface CreateCheckoutSessionParams {
   price: number;
   /** Origin for success/cancel URLs; falls back to NEXT_PUBLIC_SITE_URL. */
   baseUrl?: string;
+  /**
+   * ISO 4217 currency code for the line item. Defaults to 'usd' so existing
+   * call sites are unchanged. F-10 follow-up (multi-currency): thread the
+   * book's stored pricing currency from the checkout route once book data
+   * carries one.
+   */
+  currency?: string;
 }
 
 export async function createCheckoutSession({
@@ -38,6 +49,7 @@ export async function createCheckoutSession({
   bookTitle,
   price,
   baseUrl,
+  currency = 'usd',
 }: CreateCheckoutSessionParams) {
   const resolvedBaseUrl = baseUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   const stripe = getStripe();
@@ -49,7 +61,7 @@ export async function createCheckoutSession({
     line_items: [
       {
         price_data: {
-          currency: 'usd',
+          currency,
           product_data: {
             name: bookTitle,
           },

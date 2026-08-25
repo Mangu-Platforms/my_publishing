@@ -1,7 +1,7 @@
 # Book Lifecycle
 
 > **Task 2.0.** Verified against `audit/2026-07-28-fixes` @ `8e6fa50`.
-> Depends on `docs/architecture/ADR-001-catalog-and-identity-data-ownership.md`.
+> Depends on `docs/architecture/ADR-003-catalog-and-identity-data-ownership.md`.
 > Operator procedure lives in `docs/BOOK_PUBLISHING_RUNBOOK.md`.
 > Subordinate to `docs/NEXT_GO.md` (CCR-001).
 
