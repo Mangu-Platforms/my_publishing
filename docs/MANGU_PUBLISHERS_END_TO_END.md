@@ -19,6 +19,16 @@ This is the **single comprehensive planning reference** for the project. It merg
 | [docs/CANONICAL_PRODUCTION.md](./CANONICAL_PRODUCTION.md)                                                                   | Production target decision          |
 | [docs/BRD.md](./BRD.md)                                                                                                     | Business requirements source        |
 
+> **⚠ Supersession notice (added 2026-08-25, does not alter the text below):** This document
+> is frozen at v1.0 (2026-05-19) as a historical business/product reference. It predates
+> Project Phoenix (reactivated 2026-07-20) and the NEXT_GO launch-authority framework
+> (2026-07-18+). **Current execution authorities are `docs/NEXT_GO.md` (launch gates
+> G1–G13) and `docs/launch/PROGRAMME_END_TO_END.md` (owner-directed programme since
+> 2026-07-30)**; stack migration is governed by `docs/PROJECT_PHOENIX.md` v4.0.3 and
+> `CLAUDE.md`. In particular, **§7.1 below ("Canonical production: Cloud Run") is
+> superseded** — see [§19](#19-2026-08-25-delta) for the resolved decision and a full
+> reconciliation. Read §19 first if you only have a few minutes.
+
 ---
 
 ## Table of contents
@@ -616,10 +626,151 @@ gcloud auth login
 
 ---
 
+## 19. 2026-08-25 delta
+
+Added by an overnight autonomous session per owner request ("close out issues/PRs, run
+the full audit, compile questions"). This section **reconciles** the rest of this document
+against repo/live state as of 2026-08-25 ~22:00 UTC — it does not rewrite anything above.
+Per this repo's own rule (`CLAUDE.md` §13, `phoenix-contract` skill): amend in place, don't
+improvise silently.
+
+### 19.1 Status table — this doc (v1.0, 2026-05-19) vs. verified 2026-08-25
+
+| Claim in this doc                      | 2026-08-25 reality                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Evidence                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| §7.1 "Canonical production: Cloud Run" | **Superseded.** Vercel is sole canonical platform (ADR-001, Option B, **ACCEPTED** 2026-07-18). `cloudbuild.yaml`/Cloud Run retained only as a legacy/emergency surface until the Phase 15 DNS cutover, then retired.                                                                                                                                                                                                                                                                                                       | `docs/adr/ADR-001-canonical-platform.md`, `docs/CANONICAL_PRODUCTION.md` |
+| §13/§16 issues #65–#72, PR #73         | Renumbered. **11 open issues** tonight, all `[P0-xxx]`-tagged (#187, #191–#195, #198, #199, #203, #205, #209), mapped to `NEXT_GO.md` §5 P0 backlog, not this doc's tracker.                                                                                                                                                                                                                                                                                                                                                | live `list_issues`, `NEXT_GO.md` §5                                      |
+| §7.1 production readiness              | **Confirmed healthy tonight** — Vercel project `manguprojectz`, latest deployment `dpl_DPGSsDBKAcp3QEmynCwoCToqFXKH` **READY**, target `production`, on `main@0bb5187`; **zero runtime errors in the trailing 24h**. This session's sandbox network policy blocks direct HTTP probes to `mangu-publishers.com` (egress allowlist), so `/api/health?ready=1` was not independently re-curled tonight — last recorded readiness evidence is the 2026-08-14 NEXT_GO refresh (apex 308→www confirmed, Supabase ACTIVE_HEALTHY). | Vercel MCP `get_project`/`list_deployments`/`get_runtime_errors`         |
+| N/A — new since this doc               | **Governance gate state (`docs/NEXT_GO.md` §6, last refreshed 2026-08-14, v1.2.8):** 1 of 13 hard gates TRUE (G13 — authority doc committed), G12 PARTIAL, **G1–G11 all FALSE**. Status remains **NO-GO**. Nothing in tonight's session changed a gate — gates require human-witnessed evidence (CCR-014), not agent claims.                                                                                                                                                                                                | `docs/NEXT_GO.md` §6                                                     |
+| N/A                                    | **Two governance programmes now exist and this doc predates both:** Project Phoenix (Supabase→Better Auth/MongoDB/Vercel Blob, dual-run behind `AUTH_PROVIDER`/`DATABASE_PROVIDER`/`STORAGE_PROVIDER` flags, default `supabase` in prod) and the NEXT_GO launch-gate framework. See `.claude/skills/mangu-navigator/SKILL.md` for the current mental model.                                                                                                                                                                 | `docs/PROJECT_PHOENIX.md` v4.0.3, `CLAUDE.md`                            |
+
+### 19.2 Host conflict — resolved, not reopened
+
+The brief that produced this delta asked to "pick ONE production host… Do not leave two
+canonicals." **That decision was already made and signed on 2026-07-18** (ADR-001, Option
+B — Vercel), five weeks before this delta. Evidence it stuck: `docs/CANONICAL_PRODUCTION.md`
+carries the Vercel checklist as primary and the Cloud Run path explicitly marked
+"SUPERSEDED — do not use for GO"; tonight's Vercel API check shows `main` deploying to
+Vercel automatically on every merge (11 of the last dozen deployments are Phoenix/hardening
+PR heads, auto-built by the Vercel↔GitHub integration). Re-litigating this would contradict
+a signed ADR for no new evidence. If there's a reason to revisit it, that's a decision for
+the owner, not a default action for an agent session — flagged in §19.6.
+
+### 19.3 Competitive landscape (deliverable C)
+
+_(Netflix-for-books comparison: Kindle/KU, Kobo, Apple Books, Google Play Books, Everand,
+Libro.fm, Wattpad, Radish, Bookshop.org, D2D, Gumroad — researched 2026-08-25.)_
+
+| Competitor          | Model                                                                 | Reading UX                                               | Author/Publisher onboarding                                         | Note                                                                                                                       |
+| ------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Kindle/Amazon       | Hybrid: à la carte + Kindle Unlimited (~$11.99–13.99/mo, 20-book cap) | App + dedicated e-readers, strong offline/sync           | KDP self-publish, free, 35–70% royalty; KU needs 90-day exclusivity | Dominant distribution + device lock-in                                                                                     |
+| Kobo (Rakuten)      | Hybrid: purchase + Kobo Plus ($7.99–9.99/mo)                          | E-readers + app, strong offline, no exclusivity required | Non-exclusive via aggregators (D2D, Smashwords)                     | Amazon alternative for "wide" authors                                                                                      |
+| Apple Books         | À la carte only                                                       | Native app, offline, Apple ecosystem                     | Free, flat 70% royalty at any price, no exclusivity                 | Simplest royalty math; weak discovery off-Apple                                                                            |
+| Google Play Books   | À la carte only                                                       | Web + Android/iOS, offline                               | Free, ~70% split, no exclusivity                                    | Broad reach, low destination mindshare                                                                                     |
+| Everand (ex-Scribd) | Subscription → **credit-based** ($11.99–28.99/mo)                     | Web + app, offline                                       | Publisher/aggregator-supplied, not self-serve                       | Direct precedent for "Netflix for books" — its retreat from unlimited to credits is a warning sign for flat-rate economics |
+| Libro.fm            | Subscription credits ($14.99/mo)                                      | Audiobook-only app                                       | Publisher/distributor supplied                                      | Differentiates on indie-bookstore revenue share                                                                            |
+| Wattpad             | Freemium + Coins micropayments                                        | Web + app, serialized format                             | Fully open self-publish                                             | UGC/attention competitor, not a bookstore                                                                                  |
+| Radish              | Coins/serialized fiction                                              | —                                                        | —                                                                   | **Shut down Dec 2025** — cautionary tale for coin/micropayment models                                                      |
+| Bookshop.org        | À la carte, affiliate/mission-driven                                  | No proprietary reader; fulfills via partners             | Retail storefront via D2D (2026)                                    | Purchase-channel competitor, not UX                                                                                        |
+| Draft2Digital       | B2B distributor, free to list, 10% commission                         | N/A — fan-out to other stores                            | Self-serve upload once → many storefronts                           | Study for author-upload UX, not a storefront competitor                                                                    |
+| Gumroad             | À la carte, no subscription, 10%+$0.50/txn                            | No reader — raw file download, no DRM                    | Fully open, instant, zero vetting                                   | Frictionless-checkout UX benchmark for the 14-day test-checkout goal                                                       |
+
+**Confirmed from code, not assumed:** `lib/stripe/server.ts` sets `mode: 'payment'` — Mangu
+is currently one-time-purchase only, no subscription mode wired. Given Everand's own
+retreat from flat-rate-unlimited and Radish's shutdown, that's a defensible launch posture,
+not a gap to rush-fix. Differentiation: no competitor above combines curated
+browse+buy+in-browser-read+author-submit+partner-catalog+admin in one owned stack — Mangu's
+closest analog is Apple Books' simplicity plus Bookshop.org's curation, not the subscription
+incumbents. Near-term implication: none of this blocks the 14-day goal below; Gumroad's
+single-item checkout is the closer UX reference for that narrow path.
+
+### 19.4 14-day wins — reconciled, not reinvented
+
+The brief's three 14-day wins are **already the tracked critical path**, not a new plan:
+
+1. _One cleared title, test-mode checkout, progress save_ → this is `docs/launch/
+PROGRAMME_END_TO_END.md` H0-4 (name 3–6 launch titles + confirm rights, owner-only) →
+   H0-5 (admin publish round trip) → H0-1/H0-2 (Stripe dashboard + one real
+   purchase/refund). **Nothing code-side blocks this** — Phase 1/2 of the July programme
+   (admin write/read split, provider-aware catalog) is merged; the gap is real content and
+   owner console actions, not engineering.
+2. _Single canonical deploy checklist a human can run_ → already exists:
+   `docs/CANONICAL_PRODUCTION.md` "Operator cutover checklist," current since 2026-07-18.
+3. _P0 issue milestone; rest parked_ → already the case. All 11 open issues are P0-tagged
+   and the launch freeze (#209) already parks everything else (`NEXT_GO.md` §7/§8, Launch
+   Scope table). No new milestone needed — the freeze already **is** the milestone.
+
+### 19.5 Risks (deliverable B) — verified tonight where possible
+
+- **RLS / security posture:** live Supabase advisor check (project `tkzvikozrcynhwsqtkqp`,
+  2026-08-25) shows **2 ERROR-level `SECURITY DEFINER` view findings**
+  (`author_manuscript_feedback`, `author_manuscript_status_history`) — these are already
+  known and already have a fix drafted: `docs/launch/PROGRAMME_END_TO_END.md` agent charter
+  **A6 HARDEN**, PR #382, deliberately marked "DRAFT, post-launch, DO-NOT-MERGE during
+  freeze." Not a new finding — confirmed still accurate, still correctly deferred. Also
+  present: `auth_leaked_password_protection` WARN (matches open `HUMAN_TASKS.md` H1.4,
+  dashboard-only fix) and a long tail of INFO-level "RLS enabled, no policy" on
+  analytics/newsletter tables (low severity, no known exploit path, not actioned tonight).
+- **Webhook signing/idempotency:** already addressed by design — unique index on
+  `orders.stripe_payment_intent_id`, upsert-on-conflict, 200 on duplicate delivery (Phoenix
+  contract §5, `stripe-webhook-mangu` skill). PR #396 (open tonight) extends the dual-run
+  session check onto the checkout money-path API specifically so this holds under
+  `AUTH_PROVIDER=better-auth` too.
+- **Prerender secrets:** not independently re-verified tonight (would require reading
+  Vercel env values, which this session should not do — CCR-009 secret hygiene). No new
+  signal either way; treat `docs/SECRET_INVENTORY.md` as current.
+- **Dual-host drift:** resolved per §19.2 — one canonical host, signed.
+- **Rights on titles:** **open question, not answerable by an agent** — see §19.6.
+- **InDesign/production binaries in git:** confirmed present — `Kimi_Agent_Book prep for
+InDesign.zip` (~4 MB) and `We_Are_Wolf_InDesign_Production_Guide.docx`(+`.pdf`) are
+  tracked in the repo. Flagged, not touched: whether these belong in git history (vs. Drive
+  / Git LFS / a private asset bucket) and whether "We Are Wolf" is a cleared launch title
+  are owner decisions — see §19.6.
+
+### 19.6 Compiled open questions for the owner
+
+Numbered so they're easy to answer piecemeal; none of these blocked tonight's other work.
+
+1. **We Are Wolf / Kimi Agent Book** — are either of these the "one cleared title" for the
+   14-day win (H0-4)? Rights confirmed? Should the InDesign `.zip`/`.docx` production files
+   move out of git (Drive, LFS, or a private bucket) regardless of which title launches first?
+2. **PR #382 (A6 HARDEN — `security_invoker` fix for the 2 ERROR-level Supabase advisor
+   findings)** is marked post-launch/do-not-merge. Given these are ERROR (not WARN) severity
+   and the fix already exists and is tested against a branch DB per its own charter — worth
+   reconsidering for pre-launch merge, or is the post-launch hold intentional for a reason
+   this session doesn't have context on (e.g. avoiding freeze-window review load)?
+3. **Steward auto-approve dial** (`HUMAN_TASKS.md` A0.2, `STEWARD_AUTO_APPROVE`): currently
+   unset, so every PR still needs a human clicking both "approve" and the
+   `steward-approved` label. With 7 CI-clean Phoenix/hardening drafts sitting in the queue
+   most nights, is it time to turn this dial on, or is manual review-per-PR still preferred
+   at this stage?
+4. **85 open Dependabot security alerts** were logged in a past session
+   (`docs/launch/HUMAN_ACTIONS.md`-adjacent commit, 2026-08-21) but there's no
+   Dependabot-alert-reading tool available to this session's GitHub MCP connection to
+   re-verify the current count or severity mix tonight. Worth an explicit triage pass (a
+   scheduled agent session with the right GitHub App permissions), separate from the 10
+   open Dependabot **PRs** already triaged tonight (§19.7)?
+5. This document (v1.0) predates Phoenix and NEXT_GO by two months and duplicates content
+   now owned by `docs/NEXT_GO.md` / `docs/launch/PROGRAMME_END_TO_END.md` /
+   `docs/PROJECT_PHOENIX.md`. Keep it alive as a historical/BRD-style reference (current
+   plan, per §7 rule about not deleting things silently), or fold its still-useful parts
+   (personas, differentiators, RICEF) into the live docs and mark it SUPERSEDED like
+   `docs/LAUNCH_CHECKLIST.md` / `docs/LAUNCH_NOW.md` already are?
+
+### 19.7 Open PR/issue queue — see `HUMAN_TASKS.md`
+
+Full triage of the 18 open PRs (7 Phoenix/hardening drafts, 10 Dependabot bumps, 1
+explicitly post-launch-held) and 11 open P0 issues, run the same night, is recorded in
+`HUMAN_TASKS.md` rather than duplicated here — that file is the one humans already check
+for actionable items.
+
+---
+
 ## Document history
 
-| Version | Date       | Change                                             |
-| ------- | ---------- | -------------------------------------------------- |
-| 1.0     | 2026-05-19 | Initial end-to-end merge of all planning artifacts |
+| Version | Date       | Change                                                                                                                                                                                                              |
+| ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-05-19 | Initial end-to-end merge of all planning artifacts                                                                                                                                                                  |
+| 1.1     | 2026-08-25 | Added §19 delta (autonomous overnight session): supersession banner, host-decision reconciliation, competitive scan, 14-day-win reconciliation, verified risks, compiled owner questions. No prior content changed. |
 
 **Maintainer:** Update this file when production URL, issue status, or Phase 2 milestones change.
