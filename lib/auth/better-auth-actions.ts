@@ -32,9 +32,7 @@ export async function betterAuthSignIn(email: string, password: string) {
       headers: hdrs,
     });
 
-    const role = normalizeManguRole(
-      (result as { user?: { role?: unknown } } | null)?.user?.role
-    );
+    const role = normalizeManguRole((result as { user?: { role?: unknown } } | null)?.user?.role);
     await setRoleCookie(role);
     revalidatePath('/', 'layout');
     return { success: true as const };
@@ -56,11 +54,7 @@ export async function betterAuthSignIn(email: string, password: string) {
   }
 }
 
-export async function betterAuthSignUp(input: {
-  email: string;
-  password: string;
-  name: string;
-}) {
+export async function betterAuthSignUp(input: { email: string; password: string; name: string }) {
   const auth = await getAuth();
   const hdrs = await headers();
 
@@ -130,4 +124,60 @@ export async function betterAuthSignOut() {
   jar.delete(MANGU_ROLE_COOKIE);
   revalidatePath('/', 'layout');
   return { success: true as const };
+}
+
+/**
+ * Task 1.7-tail (REPO_AUDIT_2026-08-21 F2): re-send the email-verification
+ * link. Mirrors Better Auth's own `/send-verification-email` endpoint, which
+ * already no-ops (without leaking whether the address exists) when there is
+ * no session and the target user is missing or already verified — so no
+ * extra "already verified" check is needed here.
+ */
+export async function betterAuthSendVerificationEmail(email: string) {
+  const auth = await getAuth();
+  try {
+    await auth.api.sendVerificationEmail({
+      body: { email },
+      headers: await headers(),
+    });
+    return { success: true as const };
+  } catch (error) {
+    console.error(
+      '[auth] Better Auth verification email resend rejected:',
+      redactAuthDiagnostic(error)
+    );
+    return {
+      error: normalizeAuthErrorMessage(
+        error,
+        'We could not resend the verification email right now. Please try again.'
+      ),
+    };
+  }
+}
+
+/**
+ * Task 1.7-tail (REPO_AUDIT_2026-08-21 F2): read the current Better Auth
+ * session for server-rendered pages (e.g. /verify-email) that need to know
+ * who is asking and whether their email is already verified. Returns null
+ * on no session or any lookup failure — callers treat that the same as
+ * "not signed in", never as a fatal error.
+ */
+export async function betterAuthGetSessionUser(): Promise<{
+  email: string;
+  emailVerified: boolean;
+} | null> {
+  const auth = await getAuth();
+  try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user?.email) {
+      return null;
+    }
+    return {
+      email: session.user.email,
+      emailVerified: Boolean(session.user.emailVerified),
+    };
+  } catch (error) {
+    console.error('[auth] Better Auth session lookup failed:', redactAuthDiagnostic(error));
+    return null;
+  }
 }

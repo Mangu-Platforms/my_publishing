@@ -11,6 +11,13 @@ jest.mock('next/headers', () => ({
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
 jest.mock('@/lib/supabase/server', () => ({ createClient: jest.fn() }));
 jest.mock('@/lib/supabase/admin', () => ({ createClient: jest.fn() }));
+// REPO_AUDIT_2026-08-21 F2: actions.ts now also imports the Better Auth leg.
+// This suite only exercises the (default, untouched) Supabase branch, so the
+// real lib/auth/better-auth-actions.ts — which pulls in lib/auth.ts and the
+// better-auth package's ESM build — must never load here.
+jest.mock('@/lib/auth/better-auth-actions', () => ({
+  betterAuthSendVerificationEmail: jest.fn(),
+}));
 jest.mock('@/lib/utils/auth-rate-limit', () => ({
   authRateLimit: jest.fn(),
   getAuthIdentifier: jest.fn(),
