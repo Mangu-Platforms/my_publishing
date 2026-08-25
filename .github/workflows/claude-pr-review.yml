@@ -2,7 +2,12 @@
 # again when marked ready), so the required human approval takes under a minute.
 # This is the review half of the PR-movement pipeline (docs/AGENTIC_FOUNDRY.md §2).
 #
-# Inert until the ANTHROPIC_API_KEY repo secret exists (HUMAN_TASKS A0.1).
+# Genuinely inert (skipped, not failed) until the ANTHROPIC_API_KEY repo secret
+# exists (HUMAN_TASKS A0.1) — the job condition below checks for it directly.
+# Before this fix the job ran unconditionally and the claude-code-action step
+# errored on the missing key, so every PR carried a permanently-red "review"
+# check with no actionable fix available to an agent (found 2026-08-25 via the
+# check run logs on PR #405 — reproduces identically on any PR, not diff-specific).
 # Skips bot-authored PRs (dependabot bumps don't need a prose review).
 name: Claude PR Review
 
@@ -12,7 +17,7 @@ on:
 
 jobs:
   review:
-    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    if: github.event.pull_request.user.login != 'dependabot[bot]' && secrets.ANTHROPIC_API_KEY != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read

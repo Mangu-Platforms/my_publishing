@@ -362,3 +362,105 @@ P-044..P-047, and P-050..P-058 — these were inferred from the four source
 documents above rather than from the missing original. Also ratify the
 owner-decision table in `docs/PRODUCT_GAP_LEDGER.md` §3 (P-015, P-021, P-022,
 P-031, P-038, P-043, P-048, P-049, P-059).
+
+---
+
+## 2026-08-25 overnight session (autonomous, owner away — "close out issues/PRs, run full audit")
+
+Full write-up: `docs/MANGU_PUBLISHERS_END_TO_END.md` §19 (2026-08-25 delta).
+
+- **Production confirmed healthy**, no incident: Vercel `manguprojectz` latest deployment
+  READY on `main@0bb5187`, target `production`, zero runtime errors in trailing 24h
+  (checked via Vercel MCP; this session's sandbox network policy blocks direct HTTP probes
+  to `mangu-publishers.com`, so `/api/health?ready=1` itself was not re-curled tonight).
+- **Supabase security advisors re-checked live** (project `tkzvikozrcynhwsqtkqp`): the 2
+  ERROR-level `SECURITY DEFINER` view findings match the already-known, already-drafted fix
+  in PR #382 (A6 HARDEN) — see the owner question about reconsidering its post-launch hold
+  in the delta §19.6. `auth_leaked_password_protection` WARN still open (existing H1.4,
+  unchanged, dashboard-only fix).
+- **InDesign/production binaries confirmed still in git**: `Kimi_Agent_Book prep for
+InDesign.zip` (~4 MB), `We_Are_Wolf_InDesign_Production_Guide.docx`(+`.pdf`). Not moved
+  or touched — see delta §19.6 Q1 for the rights/storage question.
+- Host-canonical question re-litigated by an incoming brief was **not reopened** — ADR-001
+  (Vercel, accepted 2026-07-18) stands; see delta §19.2 for why.
+- Competitive landscape scan (Kindle/Kobo/Apple/Google/Everand/Libro.fm/Wattpad/Radish/
+  Bookshop.org/D2D/Gumroad) run fresh — see delta §19.3. Confirmed from code
+  (`lib/stripe/server.ts` `mode: 'payment'`): Mangu is one-time-purchase only tonight, no
+  subscription mode wired — flagged as a defensible launch posture given Everand's and
+  Radish's struggles with flat-rate/coin models, not a gap to rush-fix pre-launch.
+- Set up an hourly self-check-in routine (`trig_01KRmD4rxv5Bur5xhRZL93dc`, "MANGU overnight
+  continuation") so this session keeps making bounded progress through the night instead of
+  going idle after this turn. **Caveat:** the trigger-creation tool warned that fired
+  sessions may run without MCP connector tools (GitHub/Vercel/Supabase) even though this is
+  a self-bind onto the same session — unconfirmed either way until it actually fires once.
+  If overnight commits/PR activity stop appearing, that's the likely cause; the session can
+  still be resumed manually.
+- **Self-correction logged (2026-08-25 ~22:11 UTC):** an agent mistake briefly overwrote
+  this file with placeholder content via a direct GitHub API call (wrong `content` payload)
+  before being caught and reverted in the very next commit on this branch — full history is
+  in the commit log for `HUMAN_TASKS.md` on `claude/mangu-publishers-sprint-b840d5` if you
+  want to see it. No data was lost; flagging it for transparency, not because it needs any
+  action from you.
+- **A0.1 impact upgraded:** `claude-pr-review.yml` wasn't actually "inert" as its own header
+  comment claimed while `ANTHROPIC_API_KEY` is unset — it ran unconditionally and errored,
+  so every open PR carried a permanently-red (non-required, comment-only) "review" check.
+  Fixed the workflow itself (job now genuinely skips) on PR #405 — but A0.1 (setting the
+  actual secret) is still what turns the reviewer on; this only stopped the noise.
+
+### PR/issue queue triage (2026-08-25) — result: **nothing was obsolete**
+
+A 13-agent fan-out independently investigated all 18 open PRs and all 11 open issues
+(CI status, freeze-compliance, mergeability, cross-checked against merged history — not
+just PR/issue text). **Verdict: zero PRs and zero issues warranted closing.** Everything
+open is either legitimate in-flight work or a correctly-still-open launch gate; the
+2026-08-21 audit's "review bandwidth is the bottleneck" finding holds. What changed
+tonight, all mechanical/non-merge actions within an agent's authority (branch protection
+still requires your review + the `steward-approved` label for every one of these):
+
+| Action                                                      | Scope                                                      | Result                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Update branch (merge `main` in)                             | #384–#393 (10 dependabot), #396–#401 (6 Phoenix/hardening) | All 16 were `mergeable_state: behind`, zero textual conflicts on any (confirmed file-disjoint from what merged since). Update requested on each; CI re-running on the new heads.                                                                                                                                           |
+| Draft → ready for review                                    | #396, #397, #398, #399, #400, #401                         | All 6 were complete, CI-green, evidence-complete — just never flipped out of draft. Now visible in your normal review queue.                                                                                                                                                                                               |
+| Left untouched                                              | #395                                                       | Has its own embedded owner lane-call (JSON-LD scope, leaning L2) — still needs your explicit approve-or-revert-one-commit decision before anything else happens to it.                                                                                                                                                     |
+| Left untouched                                              | #382                                                       | Deliberately post-launch/do-not-merge (A6 HARDEN) — correct, confirmed again tonight.                                                                                                                                                                                                                                      |
+| Status comments posted (new merged evidence, no gate flips) | Issues #187, #192, #195, #198, #199, #205, #209            | Each issue's thread now reflects what's actually merged since its last (mostly 2026-07-19) comment. None closed — all still genuinely blocked on operator evidence (CCR-014).                                                                                                                                              |
+| New finding surfaced                                        | Issue #194                                                 | **No E2E/Playwright CI job exists anywhere in `.github/workflows/` right now** — `preview-e2e.yml` is gone (likely an unintended casualty of the 2026-08-14 "19 workflows → 3" consolidation). Commented on the issue; needs an owner call: restore the workflow, or formally re-scope the issue and correct `NEXT_GO.md`. |
+| Left untouched, no comment (agent judged no new evidence)   | Issues #191, #193, #203                                    | Correctly still blocked on operator action; nothing new to report.                                                                                                                                                                                                                                                         |
+
+**One highest-leverage action for you tonight/tomorrow, unchanged from the 2026-08-21
+audit and reconfirmed:** the single approving review + `steward-approved` label on
+**#395 first** (it's the doc/ledger-reconciliation keystone the rest of the queue
+implicitly references), then #396–#401 in any order — all are green and now
+out of draft.
+
+### WS1 auth-tail dual-run — done, draft PR #406 open
+
+[**PR #406**](https://github.com/Mangu-Platforms/my_publishing/pull/406) implements the
+Better Auth legs for `reset-password/confirm` and `verify-email` (2026-08-21 audit finding
+F2 — the highest-value remaining Phoenix WS1 gap; without it, forced-reset cutover can't
+actually complete for any legacy user). Reviewed the actual diff, not just the summary:
+
+- `reset-password/confirm/page.tsx` is now a server component that calls
+  `isBetterAuthPrimary()` and renders one of two client components — the Supabase logic
+  moved out **verbatim** (`SupabaseResetPasswordConfirmForm.tsx`, byte-identical behavior)
+  alongside a new `BetterAuthResetPasswordConfirmForm.tsx`. The link mechanics were traced
+  from Better Auth's actual source in `node_modules` rather than assumed (its own
+  `GET /api/auth/reset-password/:token` endpoint already handles the token, redirecting
+  here with `?token=`/`?error=` — no new route needed).
+- `verify-email/actions.ts` + `page.tsx` gained additive Better Auth branches; two new
+  helpers in `lib/auth/better-auth-actions.ts` follow the file's existing pattern exactly.
+- **Deliberately not touched, with reasoning:** `callback/route.ts` (confirmed via
+  repo-wide grep there's no OAuth/social login on either provider — nothing for it to do),
+  `middleware.ts` (verified no change needed), `components/providers/auth-provider.tsx`
+  (scoped — only 2 consumers, one of which is dead code — but explicitly handed over rather
+  than improvised, since there's no existing pattern in the repo to mirror for it).
+- `AUTH_PROVIDER` default untouched everywhere; no guardrail files (middleware, rate-limit,
+  webhook, provider switches, env validation) modified.
+- Verified: `type-check` clean, `lint` clean, `test` 760/761 (was 740/740 — the 1 failure is
+  pre-existing and unrelated, confirmed via `git stash` against unmodified `main`),
+  `validate:gap-ledger` passed. `build`/`validate-env` fail in this sandbox only (no
+  `.env.local` at all here) — confirmed pre-existing the same way, not this PR's doing.
+
+Opened as **draft**, no self-approval, no label applied — same human-gated queue as the
+rest. One real open question handed to you rather than guessed at: whether/when to scope
+the `auth-provider.tsx` client-context gap as its own follow-up (noted in the PR body).
