@@ -464,3 +464,18 @@ actually complete for any legacy user). Reviewed the actual diff, not just the s
 Opened as **draft**, no self-approval, no label applied — same human-gated queue as the
 rest. One real open question handed to you rather than guessed at: whether/when to scope
 the `auth-provider.tsx` client-context gap as its own follow-up (noted in the PR body).
+
+### Webhook event-log idempotency dual-run (F6.2) — in progress as of this writing
+
+Also flagged by the 2026-08-21 audit: `checkIdempotency`/`recordWebhookEvent`/
+`markEventProcessed` in `app/api/webhook/route.ts` still hit Supabase's `webhook_events`
+table unconditionally even in Mongo mode. **Not a double-charge risk today** — the actual
+order creation (`upsertOrderByPaymentIntent`) is already correctly dual-run with its own
+unique-index protection on `stripe_payment_intent_id`. This is the separate event-log
+bookkeeping layer on top; after Supabase teardown (Phase 13-15) it would 500 on every
+webhook delivery instead of returning 200, causing Stripe retry storms. A worktree-isolated
+background agent is adding the Mongo leg (mirroring the existing `upsertOrderByPaymentIntent`
+pattern in `lib/mongo-queries.ts` + a new unique index in `scripts/mongo-ensure-indexes.ts`)
+scoped tightly to just those three functions — nothing else in the webhook route touched.
+Will open its own draft PR; check for it if this note is still here without a completion
+follow-up.
