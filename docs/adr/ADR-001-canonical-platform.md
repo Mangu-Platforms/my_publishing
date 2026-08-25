@@ -8,6 +8,11 @@
 | **Deciders**  | Platform, Release Manager, Engineering (solo operator)                                  |
 | **Hard gate** | G9 (ADR signed + monitors on canonical origin with production readiness)                |
 
+> **Numbering note (2026-08-14):** This document is the sole **ADR-001**. The catalog-and-identity
+> data-ownership ADR (PR #351, 2026-07-28) briefly also carried the number ADR-001 and is now
+> [`docs/architecture/ADR-003-catalog-and-identity-data-ownership.md`](../architecture/ADR-003-catalog-and-identity-data-ownership.md)
+> (`docs/launch/DEFINITION_OF_LAUNCH_COMPLETE.md` B11 / HA-C6).
+
 ## Context
 
 Two production surfaces existed:

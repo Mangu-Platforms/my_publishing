@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Container } from '@/components/layout/Container';
 import { Section } from '@/components/layout/Section';
 
@@ -86,9 +87,9 @@ export default function TermsPage() {
               <h2 className="mb-2 text-2xl font-semibold text-foreground">8. Contact</h2>
               <p>
                 Questions about these terms? Reach out via our{' '}
-                <a href="/contact" className="text-primary hover:underline">
+                <Link href="/contact" className="text-primary hover:underline">
                   contact page
-                </a>
+                </Link>
                 .
               </p>
             </section>

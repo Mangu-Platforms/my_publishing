@@ -1,5 +1,6 @@
 // PERF-PHASE2-2
 import { cache } from 'react';
+import { randomUUID } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -492,7 +493,7 @@ export async function createOrder(data: {
     order_id: order.id,
     book_id: item.book_id,
     unit_price: item.unit_price,
-    license_key: `LIC-${Date.now()}-${item.book_id}`,
+    license_key: `LIC-${randomUUID()}`,
   }));
 
   const { error: itemsError } = await supabase.from('order_items').insert(orderItems);

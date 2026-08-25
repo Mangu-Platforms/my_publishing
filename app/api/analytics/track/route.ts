@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { corsHeadersFor, corsPreflightHeadersFor } from '@/lib/api/cors';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import { enforceRateLimit, getClientIdentifier } from '@/lib/rate-limit';
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const clientId = getClientIdentifier(request);
   const rateLimitResult = await enforceRateLimit('analytics', clientId);
   const rateLimitHeaders = rateLimitResult.headers;
+  const corsHeaders = corsHeadersFor(request);
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -193,7 +195,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } satisfies TrackEventResponse,
       {
         status: 200,
-        headers: rateLimitHeaders,
+        headers: { ...rateLimitHeaders, ...corsHeaders },
       }
     );
   } catch (error) {
@@ -221,14 +223,9 @@ export async function GET(): Promise<NextResponse> {
 /**
  * Handle OPTIONS for CORS preflight
  */
-export async function OPTIONS(): Promise<NextResponse> {
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
+    headers: corsPreflightHeadersFor(request, 'POST, OPTIONS'),
   });
 }

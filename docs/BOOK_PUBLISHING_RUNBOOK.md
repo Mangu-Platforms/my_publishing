@@ -4,7 +4,7 @@
 > `mangu-publishers.com`. Verified against `audit/2026-07-28-fixes` @ `8e6fa50`.
 >
 > **Read first:** `docs/BOOK_LIFECYCLE.md` (states and transitions) ·
-> `docs/architecture/ADR-001-catalog-and-identity-data-ownership.md` (why verification happens on the
+> `docs/architecture/ADR-003-catalog-and-identity-data-ownership.md` (why verification happens on the
 > public site, not the admin console). Subordinate to `docs/NEXT_GO.md` (CCR-001).
 
 ## ⚠️ Read this before you publish anything

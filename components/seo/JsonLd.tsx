@@ -49,7 +49,11 @@ function JsonLdScript({ data, id }: JsonLdProps) {
       type="application/ld+json"
       id={id}
       // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      // Escape "<" so attacker-influenced strings (book titles, review bodies)
+      // can never contain "</script>" and break out of this tag —
+      // JSON.stringify alone does not escape it. \u003c is plain JSON, so
+      // crawlers parse the payload identically.
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, '\\u003c') }}
     />
   );
 }

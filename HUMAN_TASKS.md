@@ -59,6 +59,28 @@ site keep serving the public. Path A (stabilize-only) is **off**. Production rem
 
 ---
 
+## Agentic foundry activation (added 2026-08-21 — see `docs/AGENTIC_FOUNDRY.md`)
+
+### A0.1 Set `ANTHROPIC_API_KEY` repo secret (~2 min)
+
+Settings → Secrets and variables → Actions → **Secrets** → New repository secret →
+name `ANTHROPIC_API_KEY`, value from console.anthropic.com → API keys. Until set,
+`claude.yml` (@claude responder) and `claude-pr-review.yml` (auto PR review) are inert.
+
+### A0.2 Decide the auto-approve dial: `STEWARD_AUTO_APPROVE` (~1 min)
+
+Same page → **Variables** → New variable `STEWARD_AUTO_APPROVE` = `true` to let the
+`steward-approved` label alone carry a PR to merge (label → bot approving review →
+auto-merge armed → merged on green `ci`). Leave unset to keep human review as the gate.
+Full chain + fences: `docs/AGENTIC_FOUNDRY.md` §2.
+
+### A0.3 `mongosh` on the operator machine (Phase 11 prerequisite)
+
+`npm run phoenix:verify` shells out to `mongosh`, which is not an npm dependency —
+install it (`brew install mongosh` / MongoDB docs) before the Phase 11 verification run.
+
+---
+
 ## P0 — security-critical
 
 ### H0.1 Migrate off the exposed legacy Supabase anon key
