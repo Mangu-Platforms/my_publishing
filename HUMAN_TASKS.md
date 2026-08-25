@@ -362,3 +362,37 @@ P-044..P-047, and P-050..P-058 — these were inferred from the four source
 documents above rather than from the missing original. Also ratify the
 owner-decision table in `docs/PRODUCT_GAP_LEDGER.md` §3 (P-015, P-021, P-022,
 P-031, P-038, P-043, P-048, P-049, P-059).
+
+---
+
+## 2026-08-25 overnight session (autonomous, owner away — "close out issues/PRs, run full audit")
+
+Full write-up: `docs/MANGU_PUBLISHERS_END_TO_END.md` §19 (2026-08-25 delta). Summary of
+what's new here; PR/issue triage detail lands below once the fan-out finishes.
+
+- **Production confirmed healthy**, no incident: Vercel `manguprojectz` latest deployment
+  READY on `main@0bb5187`, target `production`, zero runtime errors in trailing 24h
+  (checked via Vercel MCP; this session's sandbox network policy blocks direct HTTP probes
+  to `mangu-publishers.com`, so `/api/health?ready=1` itself was not re-curled tonight).
+- **Supabase security advisors re-checked live** (project `tkzvikozrcynhwsqtkqp`): the 2
+  ERROR-level `SECURITY DEFINER` view findings match the already-known, already-drafted fix
+  in PR #382 (A6 HARDEN) — see the owner question about reconsidering its post-launch hold
+  in the delta §19.6. `auth_leaked_password_protection` WARN still open (existing H1.4,
+  unchanged, dashboard-only fix).
+- **InDesign/production binaries confirmed still in git**: `Kimi_Agent_Book prep for
+InDesign.zip` (~4 MB), `We_Are_Wolf_InDesign_Production_Guide.docx`(+`.pdf`). Not moved
+  or touched — see delta §19.6 Q1 for the rights/storage question.
+- Host-canonical question re-litigated by an incoming brief was **not reopened** — ADR-001
+  (Vercel, accepted 2026-07-18) stands; see delta §19.2 for why.
+- Competitive landscape scan (Kindle/Kobo/Apple/Google/Everand/Libro.fm/Wattpad/Radish/
+  Bookshop.org/D2D/Gumroad) run fresh — see delta §19.3. Confirmed from code
+  (`lib/stripe/server.ts` `mode: 'payment'`): Mangu is one-time-purchase only tonight, no
+  subscription mode wired — flagged as a defensible launch posture given Everand's and
+  Radish's struggles with flat-rate/coin models, not a gap to rush-fix pre-launch.
+- Set up an hourly self-check-in routine (`trig_01KRmD4rxv5Bur5xhRZL93dc`, "MANGU overnight
+  continuation") so this session keeps making bounded progress through the night instead of
+  going idle after this turn. **Caveat:** the trigger-creation tool warned that fired
+  sessions may run without MCP connector tools (GitHub/Vercel/Supabase) even though this is
+  a self-bind onto the same session — unconfirmed either way until it actually fires once.
+  If overnight commits/PR activity stop appearing, that's the likely cause; the session can
+  still be resumed manually.
