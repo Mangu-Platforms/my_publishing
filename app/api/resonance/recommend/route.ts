@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { corsHeadersFor, corsPreflightHeadersFor } from '@/lib/api/cors';
 import { createClient } from '@/lib/supabase/server';
 import { enforceRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { RecommendRequestSchema, validateSafe, getFirstError } from '@/lib/validations/schemas';
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const clientId = getClientIdentifier(request);
   const rateLimitResult = await enforceRateLimit('api', clientId);
   const rateLimitHeaders = rateLimitResult.headers;
+  const corsHeaders = corsHeadersFor(request);
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -226,7 +228,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } satisfies ApiResponse<RecommendationResult>,
       {
         status: 200,
-        headers: rateLimitHeaders,
+        headers: { ...rateLimitHeaders, ...corsHeaders },
       }
     );
   } catch (error) {
@@ -257,6 +259,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const clientId = getClientIdentifier(request);
   const rateLimitResult = await enforceRateLimit('api', clientId);
   const rateLimitHeaders = rateLimitResult.headers;
+  const corsHeaders = corsHeadersFor(request);
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -358,6 +361,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         status: 200,
         headers: {
           ...rateLimitHeaders,
+          ...corsHeaders,
           'Cache-Control': cacheControl,
         },
       }
@@ -377,14 +381,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 /**
  * Handle OPTIONS for CORS preflight
  */
-export async function OPTIONS(): Promise<NextResponse> {
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
+    headers: corsPreflightHeadersFor(request, 'GET, POST, OPTIONS'),
   });
 }

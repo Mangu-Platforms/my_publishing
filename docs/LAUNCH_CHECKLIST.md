@@ -1,3 +1,12 @@
+> # ⛔ SUPERSEDED (2026-08-14) — DO NOT EXECUTE
+>
+> This **AWS Amplify** launch plan is not the launch path — `docs/adr/ADR-001-canonical-platform.md` made **Vercel** canonical (2026-07-18).
+> **The only live launch authorities are [`docs/NEXT_GO.md`](./NEXT_GO.md) and
+> [`docs/launch/PROGRAMME_END_TO_END.md`](./launch/PROGRAMME_END_TO_END.md).** Where this file
+> conflicts with them, they win. This file is retained as history only and is no longer maintained.
+
+---
+
 # 🚀 AWS Amplify Launch Checklist
 
 ## Pre-Launch Checklist

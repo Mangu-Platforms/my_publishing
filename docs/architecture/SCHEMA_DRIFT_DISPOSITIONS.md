@@ -1,6 +1,6 @@
 # Schema Drift Dispositions
 
-> **Companion to** `docs/architecture/ADR-001-catalog-and-identity-data-ownership.md`.
+> **Companion to** `docs/architecture/ADR-003-catalog-and-identity-data-ownership.md`.
 > Verified against `audit/2026-07-28-fixes` @ `8e6fa50`. Line numbers are from that commit.
 
 ## The constraint that shapes every disposition
