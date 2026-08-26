@@ -486,3 +486,15 @@ Stripe event twice in Mongo mode and directly asserts the mocked Supabase client
 is never called — strong proof of provider isolation, not just a claim. Index added to
 `scripts/mongo-ensure-indexes.ts` but not run (no Atlas credentials in this sandbox — same
 H-P5.4 human gate as always). Opened as **draft**, no self-approval, no label.
+
+### WS3 upload path unification (F3) — in progress as of this writing
+
+Third item from the 2026-08-21 audit's ranked list: `isBlobPrimary()` (the storage-provider
+switch) has exactly one consumer today, `lib/actions/upload.ts` — three other write paths
+(`lib/uploads/store-asset.ts`'s `storeBookAsset`, and the two API routes that call it or
+write Supabase Storage directly — `app/api/upload/book-assets/route.ts`,
+`app/api/upload/route.ts`) are Supabase-only. Flipping `STORAGE_PROVIDER=vercel-blob` today
+would split-brain storage with zero test coverage to catch it. A worktree-isolated agent is
+adding Blob legs to all three, explicitly instructed to extend rather than refactor (no
+touching the already-working `lib/actions/upload.ts`, even at the cost of a little
+duplicated `@vercel/blob` `put()` boilerplate) — will open its own draft PR.
