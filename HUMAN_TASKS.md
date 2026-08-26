@@ -653,3 +653,51 @@ No incident, no CI-red on `main`, no new owner activity detected since the last 
 Holding in monitoring mode; the hourly check-in trigger (`trig_01KRmD4rxv5Bur5xhRZL93dc`)
 stays active — there's still unstarted freeze-legal backlog (doc-hygiene batch F7,
 Dependabot triage) for it to pick up next round, so not winding down yet, just pacing.
+
+### Overnight session close-out (2026-08-26, ~00:00–05:04 UTC)
+
+Winding down the hourly check-in trigger here — six consecutive hourly check-ins with zero
+new owner activity and CI-on-`main` unchanged the whole time (`be721d9`, since 23:07 last
+night), and the freeze-legal backlog that was safe to advance solo is now genuinely
+exhausted (see below). Per the trigger's own instructions, deleting
+`trig_01KRmD4rxv5Bur5xhRZL93dc` rather than continuing to fire hourly with nothing new to
+report each time. **This does not mean unmonitored** — PR-activity subscriptions on
+#407/#408/#409/#410/#411 stay live and will wake this session for any real event (a review,
+a CI change, a merge) on any of them; the standing obligation to drive PRs I opened to green
+still holds regardless of the trigger.
+
+**Tonight's tally, in order:**
+
+1. **WS1 auth-tail dual-run (F2)** — [PR #406](https://github.com/Mangu-Platforms/my_publishing/pull/406), **merged** by the owner overnight.
+2. **Webhook event-log idempotency dual-run (F6.2)** — [PR #408](https://github.com/Mangu-Platforms/my_publishing/pull/408), open, draft, CI green.
+3. **WS3 upload path unification (F3)** — [PR #409](https://github.com/Mangu-Platforms/my_publishing/pull/409), open, draft, CI green.
+4. **WS4 dead-file sweep (F8)** — [PR #410](https://github.com/Mangu-Platforms/my_publishing/pull/410), open, draft, CI green. Corrected the audit's own framing along the way: 3 of its 5 named "dead" files turned out to be staged product work, an intentional dev tool, and a live passing test — left untouched, with the reasoning recorded so it isn't repeated at face value.
+5. **Secret-scan gate (F6.3/F6.4)** — [PR #411](https://github.com/Mangu-Platforms/my_publishing/pull/411), open, draft. Two self-corrections along the way (a licensed Action wrapper, then a shallow-clone-produced incomplete allowlist), both caught by the PR's own CI feedback and fixed properly rather than assumed away. Independently corroborated the already-tracked **H0.1** exposed-Supabase-key finding in 2 additional file locations — left deliberately unignored/visible rather than suppressed for a clean run.
+
+Plus the earlier-in-the-night work already logged above: the 13-agent PR/issue queue triage
+(zero PRs or issues warranted closing; 16 branches updated; 6 PRs undrafted; issue #194's
+missing-e2e-workflow finding surfaced), the `docs/MANGU_PUBLISHERS_END_TO_END.md` §19 delta
+reconciliation with compiled owner questions (§19.6), and the `claude-pr-review.yml` CI-noise
+fix.
+
+**Net for the queue:** 1 PR merged, 4 more open/draft/CI-green and reviewed diff-by-diff
+before being logged (never self-approved, never merged, never labeled). Combined with the
+already-standing #395→#396–401 and #386–393 queues, there's a full slate ready whenever
+review time is available — the consolidated order-of-review note earlier in this file still
+stands.
+
+**Not started tonight, deliberately, with reasoning:** F9 (logger adoption — edge-runtime
+risk in `middleware.ts` argued for more care than a solo overnight pass), F4 (e2e-in-CI —
+larger scope, ties into issue #194's already-flagged gap), the 85-alert Dependabot backlog
+(needs real triage, not a rubber-stamp), and F7's doc-hygiene batch (small, but adds another
+PR to an already-long unreviewed queue for marginal value — the one item already inside it
+that mattered, the `mongosh` prerequisite, was already present in A0.3 above).
+
+**One open question for you**, beyond what's already in `docs/MANGU_PUBLISHERS_END_TO_END.md`
+§19.6: PR #411's `secret-scan` check will show red forever until H0.1 is actually executed
+(key rotated + old key disabled) — that's by design, not a bug, but worth knowing before you
+look at the PR queue and wonder why one check is red on an otherwise-green PR.
+
+Nothing else queued. If you're reading this in the morning: the repo is in a stable,
+non-broken state, `main` is untouched from what it was at your last review, and every open
+PR is exactly what its own body says it is.
