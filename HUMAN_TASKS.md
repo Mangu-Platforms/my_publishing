@@ -579,3 +579,40 @@ references in `rotate-supabase-key.yml` to their resolved commit SHA, and pinned
    gitleaks flags the known dummy keys/test fixtures), promote it to a **required** status
    check in Settings → Branches → main → branch protection rule. That console step can't be
    done from here.
+
+### Tonight's queue, consolidated (as of 2026-08-26 03:11 UTC)
+
+The 2026-08-21 audit's F1 finding — review bandwidth is this program's actual bottleneck,
+not code production — held all night, and the queue is now long enough that it's worth one
+single pointer rather than making you reconstruct it from five separate PR write-ups above.
+Pausing new PR generation here for the same reason: five more open PRs helps nobody if
+review capacity is already the constraint.
+
+**New tonight (5), all draft, all self-reviewed diff-by-diff before being logged here —
+none self-approved or merged:**
+
+| PR                                                                                     | What                                                                 | Size                                       |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------ |
+| [#406](https://github.com/Mangu-Platforms/my_publishing/pull/406) — **merged already** | WS1 auth-tail dual-run (F2)                                          | —                                          |
+| [#408](https://github.com/Mangu-Platforms/my_publishing/pull/408)                      | Webhook event-log idempotency dual-run (F6.2)                        | small, guardrail file                      |
+| [#409](https://github.com/Mangu-Platforms/my_publishing/pull/409)                      | WS3 upload path unification onto Vercel Blob (F3)                    | medium                                     |
+| [#410](https://github.com/Mangu-Platforms/my_publishing/pull/410)                      | Dead-file sweep, 2 files only (F8)                                   | tiny, zero risk                            |
+| [#411](https://github.com/Mangu-Platforms/my_publishing/pull/411)                      | Non-required secret-scan gate + pin secrets-write action (F6.3/F6.4) | small, CI-config only, verify 2 SHAs first |
+
+**Suggested order if you're triaging fresh:** #410 first (trivially safe, 30-second read),
+then #411 (CI-only, but read the SHA-verification note in its body before trusting the pin),
+then #408 (small, touches the webhook guardrail file — worth the closer read that implies),
+then #409 (the largest diff of the five). This is in addition to, not instead of, the
+already-standing **#395 → #396–401** recommendation above — that queue predates tonight and
+is still the single highest-leverage action if you're doing one thing only.
+
+**Still open from before tonight, unchanged:** #395 (draft, needs your JSON-LD lane-call),
+#396–#401 (ready, green, just need review), #386–#393 (9 dependabot bumps, ready), plus the
+85-alert Dependabot backlog noted in the compiled questions list
+(`docs/MANGU_PUBLISHERS_END_TO_END.md` §19.6) — not triaged tonight, flagged as an open
+question rather than guessed at.
+
+No incident, no CI-red on `main`, no new owner activity detected since the last check-in.
+Holding in monitoring mode; the hourly check-in trigger (`trig_01KRmD4rxv5Bur5xhRZL93dc`)
+stays active — there's still unstarted freeze-legal backlog (doc-hygiene batch F7,
+Dependabot triage) for it to pick up next round, so not winding down yet, just pacing.
