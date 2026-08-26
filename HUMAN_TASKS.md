@@ -508,3 +508,38 @@ than silently decided. Also checked the actual installed `@vercel/blob` SDK's ty
 definitions to confirm `put()` has no overwrite-detection field before deciding
 `deduplicated: false` for every Blob upload — didn't guess. 9 new tests across 3 suites,
 770/770 minus the same 1 pre-existing unrelated failure. Draft, no self-approval, no label.
+
+### WS4 dead-file sweep (F8) — done, draft PR #410 open (self-corrected the audit's list)
+
+Fourth ranked item from the 2026-08-21 audit: "~7 [files] are dead ... Dead-file deletion is
+free progress." Before deleting anything I re-verified all 5 named candidates against the
+live tree instead of trusting that framing — **3 of the 5 turned out to be misclassified,
+not free progress at all:**
+
+- `lib/actions/payouts.ts` — NOT dead. Referenced across `BRD.md`,
+  `docs/PRODUCT_GAP_LEDGER.md`, `docs/FEATURE_PHASES.md`,
+  `docs/MASTER_EXECUTION_CHECKLIST.md`, and has its own stub skill
+  (`.claude/skills/mangu-partner-payouts/SKILL.md`, "Activate when payout features are
+  actively developed beyond Phoenix parity"). This is staged product scope, not orphaned
+  code — deleting it would have been a scope call I have no standing to make silently.
+- `app/dev/library-preview/page.tsx` — NOT dead. Its own file header says "Never imported
+  by production pages; used purely for local visual verification" — a working dev tool by
+  design, correctly unreachable from prod.
+- `lib/supabase/queries.test.ts` — NOT dead. Jest's `testMatch` glob picks up `*.test.ts`
+  anywhere in the tree; this one is live and passing (9 tests, `revalidateBooks` /
+  `revalidateAuthors` / `revalidateResonance`). It's misfiled under `lib/` instead of
+  `tests/unit/`, not dead — a relocation, not a deletion, and lower stakes than either.
+
+Only `lib/actions/follows.ts` and `lib/resonance/server.ts` had genuinely zero references
+anywhere — code, docs, and skills. **Done — deleted both, opened as
+[PR #410](https://github.com/Mangu-Platforms/my_publishing/pull/410).** Verified in an
+isolated `git worktree` (branched from `origin/main`, `node_modules` symlinked in rather
+than reinstalled) so the deletion never touched this session's own working branch:
+`type-check` clean, `lint` clean, `jest` 760/761 (the 1 failure is the same pre-existing,
+unrelated `cors-allowlist.test.ts` gap already documented in #408/#409 — confirmed identical
+on unmodified `main`, not a regression). Draft, no self-approval, no label — same queue.
+
+This is a self-correction of the audit doc's own F8 wording, not a criticism of it — the
+audit was a fast full-tree scan and said as much (§7.2 frames these as agent-actionable
+items to _verify and_ execute, not blind greenlights). Recording it here so the "dead-file"
+framing doesn't get repeated at face value in a future session.
