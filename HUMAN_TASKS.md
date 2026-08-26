@@ -554,31 +554,40 @@ not a SHA.
 **Done — [PR #411](https://github.com/Mangu-Platforms/my_publishing/pull/411).** Judgment
 call, flagged explicitly rather than done blindly: added the gitleaks step as a **new,
 separate, non-required workflow** (`.github/workflows/secret-scan.yml`), _not_ as a step
-inside `ci.yml` (the repo's one required check). Reasoning: gitleaks has never run against
-this repo's ~78-commit history, and the audit's own F6 already found multiple
-`sk_/whsec_/eyJ…/mongodb+srv://` matches in the tree that are placeholders/CI-dummies/test
-fixtures/detector regexes, not real secrets. Wiring an unreviewed first run in as _required_
-day one could plausibly false-positive and block the entire PR queue — including PRs
-unrelated to this change. This mirrors the audit's own §7.2 guidance for the F4 item
-(e2e-in-CI: "non-required check first"). Also pinned both `gliech/create-github-secret-action@v1`
-references in `rotate-supabase-key.yml` to their resolved commit SHA, and pinned the new
-`gitleaks/gitleaks-action` to its own `v2` SHA for the same reason.
+inside `ci.yml` (the repo's one required check) — for exactly the reason that materialized
+below. This mirrors the audit's own §7.2 guidance for the F4 item (e2e-in-CI: "non-required
+check first"). Also pinned `gliech/create-github-secret-action@v1` in `rotate-supabase-key.yml`
+to its resolved commit SHA (it writes GitHub Secrets — a supply-chain-sensitive path).
+
+**Self-correction, live, on this PR's own first CI run:** the first push used
+`gitleaks/gitleaks-action` (the marketplace wrapper), pinned to a SHA. It failed —
+`🛑 missing gitleaks license` — because that wrapper now requires a paid `GITLEAKS_LICENSE`
+secret for organization repos (a breaking pricing-model change on gitleaks' end, not
+something this session can provision or should gate on a purchase decision). **Fixed** by
+switching to the gitleaks **CLI binary directly** (checksum-verified against the release's
+published SHA256, run in a plain step) — the license gate is specific to the Action wrapper,
+not the underlying CLI, which stays free/MIT. Ran the corrected workflow's exact steps
+locally against this repo before pushing again (drive-to-green: prove it, don't push
+speculatively): 23 matches across 9 files. Read every flagged file/line by hand — all 23
+confirmed safe (3 are `curl -u "${VAR}:"` shell variable references with no literal secret,
+the rest are self-labeled test-/dummy-/placeholder- values or fixtures inside tests that
+specifically test a secret-redaction function) — recorded each in a new `.gitleaksignore`
+with its reasoning, re-ran locally: `no leaks found`, exit 0, then pushed.
 
 **New human follow-up (not a blocker, not urgent):**
 
-1. **Verify the two pinned SHAs.** GitHub API access wasn't available from this sandbox, so
-   both were resolved via two independent web-page fetches per action (cross-checked, not
-   guessed) rather than `git ls-remote`. A wrong SHA fails safe — the workflow simply
-   refuses to resolve the action with a clear error, it does not run something unexpected —
-   but worth a 10-second `git ls-remote --tags` confirmation before the rotation workflow is
-   next dispatched (H0.1-B, still unexecuted). SHAs used:
-   `gliech/create-github-secret-action` → `ea87807ab20663b30a1a2d14d7f6dd9490b1e7a1` (v1);
-   `gitleaks/gitleaks-action` → `ff98106e4c7b2bc287b24eaf42907196329070c7` (v2).
-2. **After PR #411's `secret-scan` workflow has run a few times** on real PRs and you've
-   reviewed the findings (allowlist any confirmed-safe fixtures via a `.gitleaksignore` if
-   gitleaks flags the known dummy keys/test fixtures), promote it to a **required** status
-   check in Settings → Branches → main → branch protection rule. That console step can't be
-   done from here.
+1. **Verify the one remaining pinned SHA** (`gliech/create-github-secret-action` →
+   `ea87807ab20663b30a1a2d14d7f6dd9490b1e7a1`, tag `v1`). GitHub API access wasn't available
+   from this sandbox, so it was resolved via two independent web-page fetches (cross-checked,
+   not guessed) rather than `git ls-remote`. A wrong SHA fails safe — the workflow simply
+   refuses to resolve the action, it does not run something unexpected — but worth a
+   10-second `git ls-remote --tags` confirmation before the rotation workflow is next
+   dispatched (H0.1-B, still unexecuted). The gitleaks CLI binary is checksum-verified
+   in-workflow on every run, so there's no equivalent trust gap there.
+2. **After `secret-scan.yml` has run a few times** on real PRs and any _new_ findings are
+   reviewed (extend `.gitleaksignore` for further confirmed-safe fixtures the same way), promote
+   it to a **required** status check in Settings → Branches → main → branch protection rule.
+   That console step can't be done from here.
 
 ### Tonight's queue, consolidated (as of 2026-08-26 03:11 UTC)
 
