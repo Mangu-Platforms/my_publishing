@@ -1,0 +1,61 @@
+# REPO_AUDIT_2026-08-21 F6.3 — secret-scan gate (PR #411).
+#
+# Every fingerprint below was individually verified by reading the flagged
+# file/line before being added here — not bulk-suppressed. Each is one of:
+#   (a) a shell variable reference (`curl -u "${VAR}:"`) that gitleaks'
+#       curl-auth-user heuristic flags on pattern alone, with no literal
+#       secret present at all;
+#   (b) a value whose own content is self-labeled test-/dummy-/placeholder-/
+#       example- (e.g. `eyJ....dummy-anon-for-ci`, `test-anon-key-for-ci`,
+#       a JWT payload literally containing the string "placeholder"); or
+#   (c) a fake-secret-shaped fixture inside a test that specifically tests a
+#       secret-REDACTION function (site-health, auth-error-messages, and the
+#       historical bug-to-issue-scrub test are three sibling files testing
+#       the same kind of redaction logic — the fixtures exist so the test can
+#       assert they get scrubbed).
+# This matches docs/REPO_AUDIT_2026-08-21.md F6's independent finding that
+# every sk_/whsec_/eyJ…/mongodb+srv:// hit in this repo is a placeholder, CI
+# dummy, detector regex, or test fixture — not a real secret.
+#
+# curl-auth-user: `curl -u "${STRIPE_SECRET_KEY}:" ...` — env var reference, no literal secret
+43723419d37befcfe5cdd5b08b26a03653581642:scripts/launch-ops/stripe-webhook-setup.sh:curl-auth-user:42
+43723419d37befcfe5cdd5b08b26a03653581642:scripts/launch-ops/stripe-webhook-setup.sh:curl-auth-user:73
+43723419d37befcfe5cdd5b08b26a03653581642:scripts/launch-ops/stripe-webhook-setup.sh:curl-auth-user:117
+#
+# tests/unit/site-health.test.ts — fake-secret fixtures for a redaction() unit test
+073ceaf1ae286b99d6f2ff78334a38c31230a9cb:tests/unit/site-health.test.ts:stripe-access-token:36
+073ceaf1ae286b99d6f2ff78334a38c31230a9cb:tests/unit/site-health.test.ts:stripe-access-token:45
+073ceaf1ae286b99d6f2ff78334a38c31230a9cb:tests/unit/site-health.test.ts:stripe-access-token:57
+073ceaf1ae286b99d6f2ff78334a38c31230a9cb:tests/unit/site-health.test.ts:stripe-access-token:60
+#
+# tests/unit/auth-error-messages.test.ts — fake-secret fixtures for an error-message redaction test
+073ceaf1ae286b99d6f2ff78334a38c31230a9cb:tests/unit/auth-error-messages.test.ts:generic-api-key:128
+073ceaf1ae286b99d6f2ff78334a38c31230a9cb:tests/unit/auth-error-messages.test.ts:stripe-access-token:43
+073ceaf1ae286b99d6f2ff78334a38c31230a9cb:tests/unit/auth-error-messages.test.ts:stripe-access-token:128
+#
+# .github/workflows/ci.yml — self-labeled `dummy-anon-for-ci` / `dummy-service-role-for-ci` build-time env
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:.github/workflows/ci.yml:generic-api-key:14
+#
+# .cursor/plans/operator_walkthrough_supplement.md — doc example, explicitly "use your real values", truncated with "..."
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:.cursor/plans/operator_walkthrough_supplement.md:generic-api-key:66
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:.cursor/plans/operator_walkthrough_supplement.md:generic-api-key:67
+#
+# cloudbuild.yaml (legacy) — JWT payload literally contains the string "placeholder"; signature is "ci-build-only"
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:cloudbuild.yaml:generic-api-key:62
+#
+# scripts/pre-launch-verify.sh — self-labeled `test-anon-key-for-ci` / `test-service-role-for-ci`
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:scripts/pre-launch-verify.sh:generic-api-key:97
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:scripts/pre-launch-verify.sh:generic-api-key:125
+#
+# tests/unit/mcp-transport-security.test.ts — self-labeled `test-mcp-key-...` constant
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:tests/unit/mcp-transport-security.test.ts:generic-api-key:23
+#
+# tests/unit/bug-to-issue-scrub.test.js — historical (no longer present at HEAD); its own name and
+# content (jwtA/jwtB test constants, TOKEN=... scrub assertions) show it was a sibling redaction
+# test to the two above, added in the same commit as site-health.test.ts / auth-error-messages.test.ts
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:tests/unit/bug-to-issue-scrub.test.js:private-key:89
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:tests/unit/bug-to-issue-scrub.test.js:jwt:10
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:tests/unit/bug-to-issue-scrub.test.js:jwt:144
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:tests/unit/bug-to-issue-scrub.test.js:jwt:145
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:tests/unit/bug-to-issue-scrub.test.js:generic-api-key:52
+1b3b054a8d29adf81e7ad04ca0e802fca6c1cc63:tests/unit/bug-to-issue-scrub.test.js:generic-api-key:56
