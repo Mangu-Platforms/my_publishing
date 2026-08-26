@@ -494,7 +494,17 @@ switch) has exactly one consumer today, `lib/actions/upload.ts` — three other 
 (`lib/uploads/store-asset.ts`'s `storeBookAsset`, and the two API routes that call it or
 write Supabase Storage directly — `app/api/upload/book-assets/route.ts`,
 `app/api/upload/route.ts`) are Supabase-only. Flipping `STORAGE_PROVIDER=vercel-blob` today
-would split-brain storage with zero test coverage to catch it. A worktree-isolated agent is
-adding Blob legs to all three, explicitly instructed to extend rather than refactor (no
-touching the already-working `lib/actions/upload.ts`, even at the cost of a little
-duplicated `@vercel/blob` `put()` boilerplate) — will open its own draft PR.
+would split-brain storage with zero test coverage to catch it.
+
+**Done — [PR #409](https://github.com/Mangu-Platforms/my_publishing/pull/409).** Reviewed
+the full diff. `lib/uploads/store-asset.ts`'s `storeBookAsset` (Supabase) has zero changed
+lines — the new `storeBookAssetToBlob` is purely additive. Both routes gate their storage
+call with `isBlobPrimary()`; the Supabase admin client factory is provably never invoked in
+Blob mode (asserted directly in the new tests, not just claimed). Handled the one real
+judgment call well: the generic-upload route's Supabase leg was never content-addressed
+(timestamp naming, no dedup) — the Blob leg deliberately keeps that same convention instead
+of introducing dedup semantics the route never had, flagged explicitly in the PR body rather
+than silently decided. Also checked the actual installed `@vercel/blob` SDK's type
+definitions to confirm `put()` has no overwrite-detection field before deciding
+`deduplicated: false` for every Blob upload — didn't guess. 9 new tests across 3 suites,
+770/770 minus the same 1 pre-existing unrelated failure. Draft, no self-approval, no label.
