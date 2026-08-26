@@ -559,32 +559,60 @@ below. This mirrors the audit's own §7.2 guidance for the F4 item (e2e-in-CI: "
 check first"). Also pinned `gliech/create-github-secret-action@v1` in `rotate-supabase-key.yml`
 to its resolved commit SHA (it writes GitHub Secrets — a supply-chain-sensitive path).
 
-**Self-correction, live, on this PR's own first CI run:** the first push used
-`gitleaks/gitleaks-action` (the marketplace wrapper), pinned to a SHA. It failed —
-`🛑 missing gitleaks license` — because that wrapper now requires a paid `GITLEAKS_LICENSE`
-secret for organization repos (a breaking pricing-model change on gitleaks' end, not
-something this session can provision or should gate on a purchase decision). **Fixed** by
-switching to the gitleaks **CLI binary directly** (checksum-verified against the release's
-published SHA256, run in a plain step) — the license gate is specific to the Action wrapper,
-not the underlying CLI, which stays free/MIT. Ran the corrected workflow's exact steps
-locally against this repo before pushing again (drive-to-green: prove it, don't push
-speculatively): 23 matches across 9 files. Read every flagged file/line by hand — all 23
-confirmed safe (3 are `curl -u "${VAR}:"` shell variable references with no literal secret,
-the rest are self-labeled test-/dummy-/placeholder- values or fixtures inside tests that
-specifically test a secret-redaction function) — recorded each in a new `.gitleaksignore`
-with its reasoning, re-ran locally: `no leaks found`, exit 0, then pushed.
+**Self-correction, twice, both on this PR's own CI feedback rather than assumed fixed:**
 
-**New human follow-up (not a blocker, not urgent):**
+1. First push used `gitleaks/gitleaks-action` (the marketplace wrapper), pinned to a SHA. It
+   failed — `🛑 missing gitleaks license` — because that wrapper now requires a paid
+   `GITLEAKS_LICENSE` secret for organization repos (a breaking pricing-model change on
+   gitleaks' end, not something this session can provision or should gate on a purchase
+   decision). **Fixed** by switching to the gitleaks **CLI binary directly**
+   (checksum-verified against the release's published SHA256) — the license gate is specific
+   to the Action wrapper, not the underlying CLI, which stays free/MIT.
+2. Ran the corrected workflow's exact steps locally before pushing again (drive-to-green:
+   prove it, don't push speculatively) — but the local sandbox's clone turned out to be
+   **shallow** (81 of the repo's real ~487 commits), so that first local pass only found 23
+   of the 27 matches CI's full-history checkout actually found; the pushed `.gitleaksignore`
+   still left CI red (check_run 98048431357). Caught via `git rev-parse
+--is-shallow-repository` (true) → `git fetch --unshallow` → re-ran the exact command
+   against the exact PR branch and reproduced CI's 27 findings exactly, fingerprint for
+   fingerprint, before rebuilding `.gitleaksignore` for real.
 
-1. **Verify the one remaining pinned SHA** (`gliech/create-github-secret-action` →
-   `ea87807ab20663b30a1a2d14d7f6dd9490b1e7a1`, tag `v1`). GitHub API access wasn't available
-   from this sandbox, so it was resolved via two independent web-page fetches (cross-checked,
-   not guessed) rather than `git ls-remote`. A wrong SHA fails safe — the workflow simply
-   refuses to resolve the action, it does not run something unexpected — but worth a
+**Security-relevant finding surfaced by that full-history scan — not new, but corroborated:**
+2 of the 4 newly-surfaced locations (`cloudbuild.yaml`, `next.config.js`, both an old commit
+`16dc1d7c…`/`c748ee8e…`) contain the **real legacy Supabase anon key**. Decoded the JWT
+payload: `{"ref":"tkzvikozrcynhwsqtkqp","role":"anon",...}` — the exact key prefix **H0.1**
+above already documents as exposed and pending rotation. **Deliberately left OUT of
+`.gitleaksignore`** rather than suppressed — allowlisting it would hide the one genuine
+signal this scan exists to catch. It will keep showing as a failing (non-blocking) check on
+every future PR/push until H0.1 is actually completed (new key rotated in + old key disabled
+in the Supabase dashboard); a future PR can then decide whether to retroactively allowlist
+it once the flagged key is provably dead. A third finding in the same commit (a
+service-role claim reusing the same real ref) has an obviously fabricated signature segment
+(literal text `ci-build-only-not-for-production`, not a valid HMAC output) so isn't a
+functioning credential — left flagged too, conservatively. **This raises the urgency of
+H0.1** slightly: it's now independently confirmed via a second, different detection method
+(pattern-based scanning, not just the original discovery) that the same real key is sitting
+in git history in at least 3 known file locations, not just the one already documented.
+
+Also fixed, unrelated: a local-validation `node_modules` symlink got swept into a commit by
+`git add -A` before removal — cleaned up in a follow-up commit, confirmed via `git diff
+origin/main --stat` that the PR's actual content is still exactly 3 files.
+
+**New human follow-up (not a blocker for merging this PR, but H0.1 above just got more urgent):**
+
+1. **The `secret-scan` check on PR #411 (and every future PR) will keep failing with "leaks
+   found: 3" until H0.1 is completed.** This is expected/correct, not a bug — see above. The
+   workflow is non-required so it doesn't block merges either way, but it's a live reminder
+   until the key is actually rotated and the old one disabled.
+2. **Verify the one pinned SHA used for `rotate-supabase-key.yml`**
+   (`gliech/create-github-secret-action` → `ea87807ab20663b30a1a2d14d7f6dd9490b1e7a1`, tag
+   `v1`). GitHub API access wasn't available from this sandbox, so it was resolved via two
+   independent web-page fetches (cross-checked, not guessed) rather than `git ls-remote`. A
+   wrong SHA fails safe — the workflow simply refuses to resolve the action — but worth a
    10-second `git ls-remote --tags` confirmation before the rotation workflow is next
-   dispatched (H0.1-B, still unexecuted). The gitleaks CLI binary is checksum-verified
-   in-workflow on every run, so there's no equivalent trust gap there.
-2. **After `secret-scan.yml` has run a few times** on real PRs and any _new_ findings are
+   dispatched. The gitleaks CLI binary is checksum-verified in-workflow on every run, so
+   there's no equivalent trust gap there.
+3. **After `secret-scan.yml` has run a few times** on real PRs and any _new_ findings are
    reviewed (extend `.gitleaksignore` for further confirmed-safe fixtures the same way), promote
    it to a **required** status check in Settings → Branches → main → branch protection rule.
    That console step can't be done from here.
