@@ -34,6 +34,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       title: `${displayName} - Author`,
       description,
       url: pageUrl,
+      // A page-level openGraph replaces the layout's, so without images here
+      // author shares carried no og:image at all.
+      images: [
+        author.photo_url
+          ? { url: author.photo_url, alt: `Photo of ${displayName}` }
+          : { url: '/og-image.png', width: 1200, height: 630, alt: 'MANGU Publishers' },
+      ],
     },
   };
 }

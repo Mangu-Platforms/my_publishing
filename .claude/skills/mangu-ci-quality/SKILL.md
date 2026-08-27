@@ -8,7 +8,7 @@ version: 1.0.0
 
 ## Floor (recon baseline)
 
-- Jest: **do not worsen** the recorded pass count (recon: 127/127 on 2026-07-18 — re-measure when touching tests).
+- Jest: **do not worsen** the recorded pass count (re-measured: 740/740 across 66 suites @ `main` 2bfebf7, 2026-08-20; the 2026-07-18 recon figure of 127/127 is long superseded — re-measure when touching tests).
 - Playwright: CI (`e2e.yml` / `preview-e2e.yml`) is baseline of record when local secrets are absent (delta D7).
 
 ## Rules

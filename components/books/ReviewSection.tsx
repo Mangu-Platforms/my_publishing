@@ -114,9 +114,9 @@ export function ReviewSection({
 
   const renderEmptyState = () => (
     <div className="py-12 text-center">
-      <MessageSquare className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-      <h3 className="mb-2 text-lg font-semibold text-gray-900">No Reviews Yet</h3>
-      <p className="mx-auto mb-6 max-w-md text-gray-600">
+      <MessageSquare className="mx-auto mb-4 h-12 w-12 text-muted-foreground/40" />
+      <h3 className="mb-2 text-lg font-semibold text-foreground">No Reviews Yet</h3>
+      <p className="mx-auto mb-6 max-w-md text-muted-foreground">
         Be the first to share your thoughts about this book!
       </p>
       {isAuthenticated && !hasUserReviewed ? (
@@ -125,7 +125,7 @@ export function ReviewSection({
           Write First Review
         </Button>
       ) : !isAuthenticated ? (
-        <p className="text-sm text-gray-500">Sign in to write the first review.</p>
+        <p className="text-sm text-muted-foreground">Sign in to write the first review.</p>
       ) : null}
     </div>
   );
@@ -133,7 +133,7 @@ export function ReviewSection({
   const renderReviewStats = () => (
     <div className="mb-8">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Reviews</h2>
+        <h2 className="text-2xl font-bold text-foreground">Reviews</h2>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setFilterSpoilers(!filterSpoilers)}>
             <Filter className="mr-2 h-4 w-4" />
@@ -239,7 +239,9 @@ export function ReviewSection({
               .slice(0, 5);
             return top.length ? (
               <div className="space-y-6">
-                <p className="text-sm text-gray-600">The reviews readers found most helpful.</p>
+                <p className="text-sm text-muted-foreground">
+                  The reviews readers found most helpful.
+                </p>
                 {top.map((review) => (
                   <ReviewCard
                     key={`helpful-${review.id}`}
@@ -252,9 +254,9 @@ export function ReviewSection({
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-6">
-                <h3 className="mb-2 text-lg font-semibold text-blue-900">Most Helpful Reviews</h3>
-                <p className="text-blue-700">
+              <div className="rounded-lg border border-primary/30 bg-primary/10 p-6">
+                <h3 className="mb-2 text-lg font-semibold text-foreground">Most Helpful Reviews</h3>
+                <p className="text-primary">
                   No reviews have been marked helpful yet. Vote on reviews you find useful and they
                   will appear here.
                 </p>
@@ -264,7 +266,7 @@ export function ReviewSection({
         </TabsContent>
 
         <TabsContent value="stats">
-          <div className="rounded-lg bg-gray-50 p-6">
+          <div className="rounded-lg bg-muted p-6">
             <h4 className="mb-4 font-semibold">Rating Distribution</h4>
             <ReviewStats
               averageRating={averageRating}

@@ -55,13 +55,13 @@ export function ReviewFilters({
       </div>
 
       {showFilters && onFilterSpoilersChange && (
-        <div className="flex items-center gap-4 rounded-lg bg-gray-50 p-4">
+        <div className="flex items-center gap-4 rounded-lg bg-muted p-4">
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={filterSpoilers}
               onChange={(e) => onFilterSpoilersChange(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-border"
             />
             Hide spoiler reviews
           </label>

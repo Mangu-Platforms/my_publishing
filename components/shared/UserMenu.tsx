@@ -41,7 +41,7 @@ export function UserMenu() {
         className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold"
         aria-label="Signed in user"
       >
-        {user.email?.[0].toUpperCase()}
+        {(user.email?.[0] ?? '?').toUpperCase()}
       </div>
     </div>
   );

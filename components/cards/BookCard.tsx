@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { formatPrice } from '@/lib/utils/format-price';
 
 /** Minimal shape required by BookCard — compatible with both Supabase and Mongo ApiBook. */
 export interface BookCardBook {
@@ -44,6 +45,10 @@ export function BookCard({ book, variant = 'default', href }: BookCardProps) {
   const bookHref = href ?? `/books/${book.slug}`;
   // Support both Supabase (average_rating) and Mongo/ApiBook (avg_rating) field names
   const displayRating = book.average_rating ?? book.avg_rating;
+  const listPrice = formatPrice(book.price);
+  // Numeric truthiness on purpose: discount_price 0 means "no discount",
+  // matching the pre-existing display and Stripe-charge semantics.
+  const salePrice = book.discount_price ? formatPrice(book.discount_price) : null;
 
   if (variant === 'compact') {
     return (
@@ -110,13 +115,21 @@ export function BookCard({ book, variant = 'default', href }: BookCardProps) {
                 <div />
               )}
               <div className="text-sm font-semibold">
-                {book.discount_price ? (
+                {salePrice ? (
                   <>
-                    <span className="mr-2 text-muted-foreground line-through">${book.price}</span>
-                    <span className="text-primary">${book.discount_price}</span>
+                    {listPrice && (
+                      <span className="mr-2 text-muted-foreground line-through">
+                        <span className="sr-only">Original price </span>
+                        {listPrice}
+                      </span>
+                    )}
+                    <span className="text-primary">
+                      <span className="sr-only">Sale price </span>
+                      {salePrice}
+                    </span>
                   </>
                 ) : (
-                  <span>${book.price}</span>
+                  listPrice && <span>{listPrice}</span>
                 )}
               </div>
             </div>

@@ -18,8 +18,9 @@ export async function AuthorSpotlight() {
     authors = [];
   }
 
-  // Only authors with something published are worth spotlighting.
-  const featured = authors.filter((author) => author.total_books > 0);
+  // Only authors with something published are worth spotlighting. Empty pen
+  // names are dropped too — the avatar renders pen_name[0] during SSR.
+  const featured = authors.filter((author) => author.total_books > 0 && author.pen_name?.trim());
 
   if (featured.length === 0) {
     return null;
@@ -33,9 +34,7 @@ export async function AuthorSpotlight() {
             <h2 className="mb-1 text-2xl font-light tracking-tight sm:text-3xl">
               Author Spotlight
             </h2>
-            <p className="text-sm text-muted-foreground">
-              The people behind the books we publish
-            </p>
+            <p className="text-sm text-muted-foreground">The people behind the books we publish</p>
           </div>
         </div>
 
@@ -46,7 +45,7 @@ export async function AuthorSpotlight() {
                 <div className="mb-4 flex justify-center">
                   <div className="relative h-20 w-20 overflow-hidden rounded-full bg-primary/10 ring-2 ring-border transition-all duration-300 group-hover:ring-primary/30">
                     <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-primary/60">
-                      {author.pen_name[0].toUpperCase()}
+                      {author.pen_name.trim()[0].toUpperCase()}
                     </div>
                   </div>
                 </div>

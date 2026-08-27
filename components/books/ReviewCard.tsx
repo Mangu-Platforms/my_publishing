@@ -182,17 +182,17 @@ export function ReviewCard({
             alt={`Avatar for ${user.full_name || user.username}`}
             width={compact ? 32 : 40}
             height={compact ? 32 : 40}
-            className="rounded-full border-2 border-white shadow-sm"
+            className="rounded-full border-2 border-background shadow-sm"
           />
         ) : (
           <div
             className={cn(
-              'flex items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-blue-100 to-purple-100 shadow-sm',
+              'flex items-center justify-center rounded-full border-2 border-background bg-primary/10 shadow-sm',
               compact ? 'h-8 w-8' : 'h-10 w-10'
             )}
           >
             <User
-              className={cn('text-blue-600', compact ? 'h-4 w-4' : 'h-5 w-5')}
+              className={cn('text-primary', compact ? 'h-4 w-4' : 'h-5 w-5')}
               aria-hidden="true"
             />
           </div>
@@ -204,7 +204,7 @@ export function ReviewCard({
   const renderBookInfo = () => (
     <Link
       href={`/books/${book?.id}`}
-      className="flex items-center gap-2 rounded-lg bg-gray-50 p-2 transition-colors hover:bg-gray-100"
+      className="flex items-center gap-2 rounded-lg bg-muted p-2 transition-colors hover:bg-muted/80"
     >
       {book?.cover_url ? (
         <Image
@@ -215,13 +215,13 @@ export function ReviewCard({
           className="rounded object-cover"
         />
       ) : (
-        <div className="flex h-12 w-10 items-center justify-center rounded bg-gradient-to-br from-gray-200 to-gray-300">
-          <Book className="h-5 w-5 text-gray-500" aria-hidden="true" />
+        <div className="flex h-12 w-10 items-center justify-center rounded bg-muted">
+          <Book className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-900">{book?.title}</p>
-        <p className="text-xs text-gray-500">Book Review</p>
+        <p className="truncate text-sm font-medium text-foreground">{book?.title}</p>
+        <p className="text-xs text-muted-foreground">Book Review</p>
       </div>
     </Link>
   );
@@ -229,7 +229,7 @@ export function ReviewCard({
   return (
     <article
       className={cn(
-        'rounded-lg border bg-white p-4 transition-all hover:shadow-sm',
+        'rounded-lg border bg-card p-4 transition-all hover:shadow-sm',
         compact ? 'p-3' : 'p-4'
       )}
     >
@@ -242,7 +242,7 @@ export function ReviewCard({
             <div>
               <Link
                 href={`/users/${user.id}`}
-                className="font-medium text-gray-900 transition-colors hover:text-blue-600"
+                className="font-medium text-foreground transition-colors hover:text-primary"
               >
                 {user.full_name || user.username}
               </Link>
@@ -255,11 +255,11 @@ export function ReviewCard({
                   Verified Purchase
                 </Badge>
               )}
-              <span className="ml-2 text-sm text-gray-500">
+              <span className="ml-2 text-sm text-muted-foreground">
                 {formatDistanceToNow(new Date(review.created_at), { addSuffix: true })}
               </span>
               {review.updated_at !== review.created_at && (
-                <span className="ml-2 text-xs text-gray-400">(edited)</span>
+                <span className="ml-2 text-xs text-muted-foreground">(edited)</span>
               )}
             </div>
 
@@ -286,7 +286,9 @@ export function ReviewCard({
       {showBookInfo && book && renderBookInfo()}
 
       {/* Review Title */}
-      {review.title && <h3 className="mb-2 text-lg font-semibold text-gray-900">{review.title}</h3>}
+      {review.title && (
+        <h3 className="mb-2 text-lg font-semibold text-foreground">{review.title}</h3>
+      )}
 
       {/* Spoiler Warning */}
       {review.is_spoiler && !showSpoiler && (
@@ -316,31 +318,31 @@ export function ReviewCard({
           !showSpoiler && review.is_spoiler && 'select-none blur-sm'
         )}
       >
-        <p className="whitespace-pre-wrap text-gray-700">{review.content}</p>
+        <p className="whitespace-pre-wrap text-foreground">{review.content}</p>
       </div>
 
       {/* Author Reply */}
       {authorReply && (showSpoiler || !review.is_spoiler) && (
-        <div className="mb-4 rounded-lg border-l-4 border-blue-300 bg-blue-50 p-3">
-          <div className="mb-1 flex items-center gap-2 text-sm font-medium text-blue-900">
+        <div className="mb-4 rounded-lg border-l-4 border-primary/40 bg-primary/10 p-3">
+          <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
             <PenLine className="h-4 w-4" aria-hidden="true" />
             Response from the author
             {authorReplyAt && (
-              <span className="text-xs font-normal text-blue-500">
+              <span className="text-xs font-normal text-muted-foreground">
                 {formatDistanceToNow(new Date(authorReplyAt), { addSuffix: true })}
               </span>
             )}
           </div>
-          <p className="whitespace-pre-wrap text-sm text-blue-900">{authorReply}</p>
+          <p className="whitespace-pre-wrap text-sm text-foreground">{authorReply}</p>
         </div>
       )}
 
       {/* Author Reply Form (book author only) */}
       {canReply && showReplyForm && (
-        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+        <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
           <label
             htmlFor={`reply-${review.id}`}
-            className="mb-2 block text-sm font-medium text-gray-900"
+            className="mb-2 block text-sm font-medium text-foreground"
           >
             {authorReply ? 'Edit your response' : 'Respond to this review'}
           </label>
@@ -381,7 +383,7 @@ export function ReviewCard({
             >
               Cancel
             </Button>
-            <span className="ml-auto text-xs text-gray-400">{replyDraft.length}/2000</span>
+            <span className="ml-auto text-xs text-muted-foreground">{replyDraft.length}/2000</span>
           </div>
         </div>
       )}
@@ -395,9 +397,11 @@ export function ReviewCard({
               size="sm"
               onClick={() => handleVote(true)}
               disabled={isLoading}
-              className={cn('h-8 px-2', userVote === true && 'bg-blue-50 text-blue-600')}
+              aria-label="Mark review helpful"
+              aria-pressed={userVote === true}
+              className={cn('h-8 px-2', userVote === true && 'bg-primary/10 text-primary')}
             >
-              <ThumbsUp className="mr-1 h-4 w-4" />
+              <ThumbsUp className="mr-1 h-4 w-4" aria-hidden="true" />
               <span className="font-medium">{helpfulCount}</span>
             </Button>
 
@@ -407,9 +411,11 @@ export function ReviewCard({
                 size="sm"
                 onClick={() => handleVote(false)}
                 disabled={isLoading}
-                className={cn('h-8 px-2', userVote === false && 'bg-gray-100 text-gray-600')}
+                aria-label="Mark review not helpful"
+                aria-pressed={userVote === false}
+                className={cn('h-8 px-2', userVote === false && 'bg-muted text-muted-foreground')}
               >
-                <ThumbsDown className="h-4 w-4" />
+                <ThumbsDown className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
           </div>
@@ -425,7 +431,7 @@ export function ReviewCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              className="h-8 text-primary hover:bg-primary/10 hover:text-primary"
               onClick={() => {
                 setReplyDraft(authorReply ?? '');
                 setShowReplyForm((prev) => !prev);

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -8,8 +9,11 @@ import { Section } from '@/components/layout/Section';
 import { AudioPlayer } from '@/components/players/AudioPlayer';
 import { formatDurationLong } from '@/components/audio/format';
 
+// Deduplicate the metadata + page-body fetches into one request-scoped call.
+const getAudiobook = cache((id: string) => fetchAudiobookById(id));
+
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const data = await fetchAudiobookById(params.id);
+  const data = await getAudiobook(params.id);
 
   if (!data) {
     return {
@@ -24,11 +28,12 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     title: `${data.title} - Audiobook`,
     description:
       data.description || `Listen to ${data.title} by ${authorName} on MANGU Publishers.`,
+    alternates: { canonical: `/audio/${params.id}` },
   };
 }
 
 export default async function AudiobookPage({ params }: { params: { id: string } }) {
-  const data = await fetchAudiobookById(params.id);
+  const data = await getAudiobook(params.id);
 
   if (!data) {
     notFound();
@@ -49,6 +54,8 @@ export default async function AudiobookPage({ params }: { params: { id: string }
                   src={data.cover_url}
                   alt={`Cover of ${data.title}`}
                   fill
+                  priority
+                  sizes="(max-width: 768px) 100vw, 448px"
                   className="rounded-lg object-cover"
                 />
               </div>
