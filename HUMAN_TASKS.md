@@ -464,3 +464,240 @@ actually complete for any legacy user). Reviewed the actual diff, not just the s
 Opened as **draft**, no self-approval, no label applied — same human-gated queue as the
 rest. One real open question handed to you rather than guessed at: whether/when to scope
 the `auth-provider.tsx` client-context gap as its own follow-up (noted in the PR body).
+
+### Webhook event-log idempotency dual-run (F6.2) — in progress as of this writing
+
+Also flagged by the 2026-08-21 audit: `checkIdempotency`/`recordWebhookEvent`/
+`markEventProcessed` in `app/api/webhook/route.ts` still hit Supabase's `webhook_events`
+table unconditionally even in Mongo mode. **Not a double-charge risk today** — the actual
+order creation (`upsertOrderByPaymentIntent`) is already correctly dual-run with its own
+unique-index protection on `stripe_payment_intent_id`. This is the separate event-log
+bookkeeping layer on top; after Supabase teardown (Phase 13-15) it would 500 on every
+webhook delivery instead of returning 200, causing Stripe retry storms.
+
+**Done — [PR #408](https://github.com/Mangu-Platforms/my_publishing/pull/408).** Reviewed
+the full diff (not just the summary), same as #406: `app/api/webhook/route.ts`'s change is
+exactly an import line plus 4 minimal `if (isMongoPrimary())` branches at the named call
+sites — every `else` branch is the original line(s) verbatim (signature verification, the
+event-type switch, all 4 `handle*` functions, and the 500-vs-200 logic untouched). New
+Mongo functions in `lib/mongo-queries.ts` mirror the existing `upsertOrderByPaymentIntent`
+style. The new test (`tests/unit/webhook-event-log-dual-run.test.ts`) delivers the same
+Stripe event twice in Mongo mode and directly asserts the mocked Supabase client's `.from()`
+is never called — strong proof of provider isolation, not just a claim. Index added to
+`scripts/mongo-ensure-indexes.ts` but not run (no Atlas credentials in this sandbox — same
+H-P5.4 human gate as always). Opened as **draft**, no self-approval, no label.
+
+### WS3 upload path unification (F3) — in progress as of this writing
+
+Third item from the 2026-08-21 audit's ranked list: `isBlobPrimary()` (the storage-provider
+switch) has exactly one consumer today, `lib/actions/upload.ts` — three other write paths
+(`lib/uploads/store-asset.ts`'s `storeBookAsset`, and the two API routes that call it or
+write Supabase Storage directly — `app/api/upload/book-assets/route.ts`,
+`app/api/upload/route.ts`) are Supabase-only. Flipping `STORAGE_PROVIDER=vercel-blob` today
+would split-brain storage with zero test coverage to catch it.
+
+**Done — [PR #409](https://github.com/Mangu-Platforms/my_publishing/pull/409).** Reviewed
+the full diff. `lib/uploads/store-asset.ts`'s `storeBookAsset` (Supabase) has zero changed
+lines — the new `storeBookAssetToBlob` is purely additive. Both routes gate their storage
+call with `isBlobPrimary()`; the Supabase admin client factory is provably never invoked in
+Blob mode (asserted directly in the new tests, not just claimed). Handled the one real
+judgment call well: the generic-upload route's Supabase leg was never content-addressed
+(timestamp naming, no dedup) — the Blob leg deliberately keeps that same convention instead
+of introducing dedup semantics the route never had, flagged explicitly in the PR body rather
+than silently decided. Also checked the actual installed `@vercel/blob` SDK's type
+definitions to confirm `put()` has no overwrite-detection field before deciding
+`deduplicated: false` for every Blob upload — didn't guess. 9 new tests across 3 suites,
+770/770 minus the same 1 pre-existing unrelated failure. Draft, no self-approval, no label.
+
+### WS4 dead-file sweep (F8) — done, draft PR #410 open (self-corrected the audit's list)
+
+Fourth ranked item from the 2026-08-21 audit: "~7 [files] are dead ... Dead-file deletion is
+free progress." Before deleting anything I re-verified all 5 named candidates against the
+live tree instead of trusting that framing — **3 of the 5 turned out to be misclassified,
+not free progress at all:**
+
+- `lib/actions/payouts.ts` — NOT dead. Referenced across `BRD.md`,
+  `docs/PRODUCT_GAP_LEDGER.md`, `docs/FEATURE_PHASES.md`,
+  `docs/MASTER_EXECUTION_CHECKLIST.md`, and has its own stub skill
+  (`.claude/skills/mangu-partner-payouts/SKILL.md`, "Activate when payout features are
+  actively developed beyond Phoenix parity"). This is staged product scope, not orphaned
+  code — deleting it would have been a scope call I have no standing to make silently.
+- `app/dev/library-preview/page.tsx` — NOT dead. Its own file header says "Never imported
+  by production pages; used purely for local visual verification" — a working dev tool by
+  design, correctly unreachable from prod.
+- `lib/supabase/queries.test.ts` — NOT dead. Jest's `testMatch` glob picks up `*.test.ts`
+  anywhere in the tree; this one is live and passing (9 tests, `revalidateBooks` /
+  `revalidateAuthors` / `revalidateResonance`). It's misfiled under `lib/` instead of
+  `tests/unit/`, not dead — a relocation, not a deletion, and lower stakes than either.
+
+Only `lib/actions/follows.ts` and `lib/resonance/server.ts` had genuinely zero references
+anywhere — code, docs, and skills. **Done — deleted both, opened as
+[PR #410](https://github.com/Mangu-Platforms/my_publishing/pull/410).** Verified in an
+isolated `git worktree` (branched from `origin/main`, `node_modules` symlinked in rather
+than reinstalled) so the deletion never touched this session's own working branch:
+`type-check` clean, `lint` clean, `jest` 760/761 (the 1 failure is the same pre-existing,
+unrelated `cors-allowlist.test.ts` gap already documented in #408/#409 — confirmed identical
+on unmodified `main`, not a regression). Draft, no self-approval, no label — same queue.
+
+This is a self-correction of the audit doc's own F8 wording, not a criticism of it — the
+audit was a fast full-tree scan and said as much (§7.2 frames these as agent-actionable
+items to _verify and_ execute, not blind greenlights). Recording it here so the "dead-file"
+framing doesn't get repeated at face value in a future session.
+
+### Secret-scan gate (F6.3/F6.4) — done, draft PR #411 open — NEW human follow-up below
+
+Fifth+sixth ranked items from the 2026-08-21 audit: no gitleaks/secret-scanning step exists
+anywhere on the canonical deploy path, and `rotate-supabase-key.yml`'s
+`gliech/create-github-secret-action@v1` (a secrets-write action) is pinned to a mutable tag,
+not a SHA.
+
+**Done — [PR #411](https://github.com/Mangu-Platforms/my_publishing/pull/411).** Judgment
+call, flagged explicitly rather than done blindly: added the gitleaks step as a **new,
+separate, non-required workflow** (`.github/workflows/secret-scan.yml`), _not_ as a step
+inside `ci.yml` (the repo's one required check) — for exactly the reason that materialized
+below. This mirrors the audit's own §7.2 guidance for the F4 item (e2e-in-CI: "non-required
+check first"). Also pinned `gliech/create-github-secret-action@v1` in `rotate-supabase-key.yml`
+to its resolved commit SHA (it writes GitHub Secrets — a supply-chain-sensitive path).
+
+**Self-correction, twice, both on this PR's own CI feedback rather than assumed fixed:**
+
+1. First push used `gitleaks/gitleaks-action` (the marketplace wrapper), pinned to a SHA. It
+   failed — `🛑 missing gitleaks license` — because that wrapper now requires a paid
+   `GITLEAKS_LICENSE` secret for organization repos (a breaking pricing-model change on
+   gitleaks' end, not something this session can provision or should gate on a purchase
+   decision). **Fixed** by switching to the gitleaks **CLI binary directly**
+   (checksum-verified against the release's published SHA256) — the license gate is specific
+   to the Action wrapper, not the underlying CLI, which stays free/MIT.
+2. Ran the corrected workflow's exact steps locally before pushing again (drive-to-green:
+   prove it, don't push speculatively) — but the local sandbox's clone turned out to be
+   **shallow** (81 of the repo's real ~487 commits), so that first local pass only found 23
+   of the 27 matches CI's full-history checkout actually found; the pushed `.gitleaksignore`
+   still left CI red (check_run 98048431357). Caught via `git rev-parse
+--is-shallow-repository` (true) → `git fetch --unshallow` → re-ran the exact command
+   against the exact PR branch and reproduced CI's 27 findings exactly, fingerprint for
+   fingerprint, before rebuilding `.gitleaksignore` for real.
+
+**Security-relevant finding surfaced by that full-history scan — not new, but corroborated:**
+2 of the 4 newly-surfaced locations (`cloudbuild.yaml`, `next.config.js`, both an old commit
+`16dc1d7c…`/`c748ee8e…`) contain the **real legacy Supabase anon key**. Decoded the JWT
+payload: `{"ref":"tkzvikozrcynhwsqtkqp","role":"anon",...}` — the exact key prefix **H0.1**
+above already documents as exposed and pending rotation. **Deliberately left OUT of
+`.gitleaksignore`** rather than suppressed — allowlisting it would hide the one genuine
+signal this scan exists to catch. It will keep showing as a failing (non-blocking) check on
+every future PR/push until H0.1 is actually completed (new key rotated in + old key disabled
+in the Supabase dashboard); a future PR can then decide whether to retroactively allowlist
+it once the flagged key is provably dead. A third finding in the same commit (a
+service-role claim reusing the same real ref) has an obviously fabricated signature segment
+(literal text `ci-build-only-not-for-production`, not a valid HMAC output) so isn't a
+functioning credential — left flagged too, conservatively. **This raises the urgency of
+H0.1** slightly: it's now independently confirmed via a second, different detection method
+(pattern-based scanning, not just the original discovery) that the same real key is sitting
+in git history in at least 3 known file locations, not just the one already documented.
+
+Also fixed, unrelated: a local-validation `node_modules` symlink got swept into a commit by
+`git add -A` before removal — cleaned up in a follow-up commit, confirmed via `git diff
+origin/main --stat` that the PR's actual content is still exactly 3 files.
+
+**New human follow-up (not a blocker for merging this PR, but H0.1 above just got more urgent):**
+
+1. **The `secret-scan` check on PR #411 (and every future PR) will keep failing with "leaks
+   found: 3" until H0.1 is completed.** This is expected/correct, not a bug — see above. The
+   workflow is non-required so it doesn't block merges either way, but it's a live reminder
+   until the key is actually rotated and the old one disabled.
+2. **Verify the one pinned SHA used for `rotate-supabase-key.yml`**
+   (`gliech/create-github-secret-action` → `ea87807ab20663b30a1a2d14d7f6dd9490b1e7a1`, tag
+   `v1`). GitHub API access wasn't available from this sandbox, so it was resolved via two
+   independent web-page fetches (cross-checked, not guessed) rather than `git ls-remote`. A
+   wrong SHA fails safe — the workflow simply refuses to resolve the action — but worth a
+   10-second `git ls-remote --tags` confirmation before the rotation workflow is next
+   dispatched. The gitleaks CLI binary is checksum-verified in-workflow on every run, so
+   there's no equivalent trust gap there.
+3. **After `secret-scan.yml` has run a few times** on real PRs and any _new_ findings are
+   reviewed (extend `.gitleaksignore` for further confirmed-safe fixtures the same way), promote
+   it to a **required** status check in Settings → Branches → main → branch protection rule.
+   That console step can't be done from here.
+
+### Tonight's queue, consolidated (as of 2026-08-26 03:11 UTC)
+
+The 2026-08-21 audit's F1 finding — review bandwidth is this program's actual bottleneck,
+not code production — held all night, and the queue is now long enough that it's worth one
+single pointer rather than making you reconstruct it from five separate PR write-ups above.
+Pausing new PR generation here for the same reason: five more open PRs helps nobody if
+review capacity is already the constraint.
+
+**New tonight (5), all draft, all self-reviewed diff-by-diff before being logged here —
+none self-approved or merged:**
+
+| PR                                                                                     | What                                                                 | Size                                       |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------ |
+| [#406](https://github.com/Mangu-Platforms/my_publishing/pull/406) — **merged already** | WS1 auth-tail dual-run (F2)                                          | —                                          |
+| [#408](https://github.com/Mangu-Platforms/my_publishing/pull/408)                      | Webhook event-log idempotency dual-run (F6.2)                        | small, guardrail file                      |
+| [#409](https://github.com/Mangu-Platforms/my_publishing/pull/409)                      | WS3 upload path unification onto Vercel Blob (F3)                    | medium                                     |
+| [#410](https://github.com/Mangu-Platforms/my_publishing/pull/410)                      | Dead-file sweep, 2 files only (F8)                                   | tiny, zero risk                            |
+| [#411](https://github.com/Mangu-Platforms/my_publishing/pull/411)                      | Non-required secret-scan gate + pin secrets-write action (F6.3/F6.4) | small, CI-config only, verify 2 SHAs first |
+
+**Suggested order if you're triaging fresh:** #410 first (trivially safe, 30-second read),
+then #411 (CI-only, but read the SHA-verification note in its body before trusting the pin),
+then #408 (small, touches the webhook guardrail file — worth the closer read that implies),
+then #409 (the largest diff of the five). This is in addition to, not instead of, the
+already-standing **#395 → #396–401** recommendation above — that queue predates tonight and
+is still the single highest-leverage action if you're doing one thing only.
+
+**Still open from before tonight, unchanged:** #395 (draft, needs your JSON-LD lane-call),
+#396–#401 (ready, green, just need review), #386–#393 (9 dependabot bumps, ready), plus the
+85-alert Dependabot backlog noted in the compiled questions list
+(`docs/MANGU_PUBLISHERS_END_TO_END.md` §19.6) — not triaged tonight, flagged as an open
+question rather than guessed at.
+
+No incident, no CI-red on `main`, no new owner activity detected since the last check-in.
+Holding in monitoring mode; the hourly check-in trigger (`trig_01KRmD4rxv5Bur5xhRZL93dc`)
+stays active — there's still unstarted freeze-legal backlog (doc-hygiene batch F7,
+Dependabot triage) for it to pick up next round, so not winding down yet, just pacing.
+
+### Overnight session close-out (2026-08-26, ~00:00–05:04 UTC)
+
+Winding down the hourly check-in trigger here — six consecutive hourly check-ins with zero
+new owner activity and CI-on-`main` unchanged the whole time (`be721d9`, since 23:07 last
+night), and the freeze-legal backlog that was safe to advance solo is now genuinely
+exhausted (see below). Per the trigger's own instructions, deleting
+`trig_01KRmD4rxv5Bur5xhRZL93dc` rather than continuing to fire hourly with nothing new to
+report each time. **This does not mean unmonitored** — PR-activity subscriptions on
+#407/#408/#409/#410/#411 stay live and will wake this session for any real event (a review,
+a CI change, a merge) on any of them; the standing obligation to drive PRs I opened to green
+still holds regardless of the trigger.
+
+**Tonight's tally, in order:**
+
+1. **WS1 auth-tail dual-run (F2)** — [PR #406](https://github.com/Mangu-Platforms/my_publishing/pull/406), **merged** by the owner overnight.
+2. **Webhook event-log idempotency dual-run (F6.2)** — [PR #408](https://github.com/Mangu-Platforms/my_publishing/pull/408), open, draft, CI green.
+3. **WS3 upload path unification (F3)** — [PR #409](https://github.com/Mangu-Platforms/my_publishing/pull/409), open, draft, CI green.
+4. **WS4 dead-file sweep (F8)** — [PR #410](https://github.com/Mangu-Platforms/my_publishing/pull/410), open, draft, CI green. Corrected the audit's own framing along the way: 3 of its 5 named "dead" files turned out to be staged product work, an intentional dev tool, and a live passing test — left untouched, with the reasoning recorded so it isn't repeated at face value.
+5. **Secret-scan gate (F6.3/F6.4)** — [PR #411](https://github.com/Mangu-Platforms/my_publishing/pull/411), open, draft. Two self-corrections along the way (a licensed Action wrapper, then a shallow-clone-produced incomplete allowlist), both caught by the PR's own CI feedback and fixed properly rather than assumed away. Independently corroborated the already-tracked **H0.1** exposed-Supabase-key finding in 2 additional file locations — left deliberately unignored/visible rather than suppressed for a clean run.
+
+Plus the earlier-in-the-night work already logged above: the 13-agent PR/issue queue triage
+(zero PRs or issues warranted closing; 16 branches updated; 6 PRs undrafted; issue #194's
+missing-e2e-workflow finding surfaced), the `docs/MANGU_PUBLISHERS_END_TO_END.md` §19 delta
+reconciliation with compiled owner questions (§19.6), and the `claude-pr-review.yml` CI-noise
+fix.
+
+**Net for the queue:** 1 PR merged, 4 more open/draft/CI-green and reviewed diff-by-diff
+before being logged (never self-approved, never merged, never labeled). Combined with the
+already-standing #395→#396–401 and #386–393 queues, there's a full slate ready whenever
+review time is available — the consolidated order-of-review note earlier in this file still
+stands.
+
+**Not started tonight, deliberately, with reasoning:** F9 (logger adoption — edge-runtime
+risk in `middleware.ts` argued for more care than a solo overnight pass), F4 (e2e-in-CI —
+larger scope, ties into issue #194's already-flagged gap), the 85-alert Dependabot backlog
+(needs real triage, not a rubber-stamp), and F7's doc-hygiene batch (small, but adds another
+PR to an already-long unreviewed queue for marginal value — the one item already inside it
+that mattered, the `mongosh` prerequisite, was already present in A0.3 above).
+
+**One open question for you**, beyond what's already in `docs/MANGU_PUBLISHERS_END_TO_END.md`
+§19.6: PR #411's `secret-scan` check will show red forever until H0.1 is actually executed
+(key rotated + old key disabled) — that's by design, not a bug, but worth knowing before you
+look at the PR queue and wonder why one check is red on an otherwise-green PR.
+
+Nothing else queued. If you're reading this in the morning: the repo is in a stable,
+non-broken state, `main` is untouched from what it was at your last review, and every open
+PR is exactly what its own body says it is.

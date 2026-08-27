@@ -36,6 +36,10 @@ secrets.*
 .vercel
 .amplify-hosting/
 
+# Claude Code agent worktrees (isolated checkouts for background agents —
+# transient working directories, never repo content)
+.claude/worktrees/
+
 # IDE and editors
 .vscode/
 .idea/
